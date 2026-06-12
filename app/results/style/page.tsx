@@ -90,53 +90,56 @@ export default function StyleResultsPage() {
   const [activeOccasion, setActiveOccasion] = useState<OccasionKey>("everyday");
 
   const generateImages = useCallback(async (imageDataUrl: string, a: ColorAnalysis) => {
-    const s = a.style;
-    if (!s) { setPhase("done"); return; }
+    // Never throw — image generation failure must not crash the page
+    try {
+      const s = a.style;
+      if (!s) { setPhase("done"); return; }
 
-    const photoKey = imageDataUrl.slice(0, 80);
+      const photoKey = imageDataUrl.slice(0, 80);
 
-    // Module-level cache hit
-    if (_styleCache?.photoKey === photoKey) {
-      setStyleImages(_styleCache.images);
-      setGenDone(OCCASIONS.length);
-      setPhase("done");
-      return;
-    }
-
-    setGenDone(0);
-    setPhase("generating");
-
-    const map: Record<string, string | null> = {};
-
-    // Sequential — one at a time to respect 5 images/min rate limit
-    for (let i = 0; i < OCCASIONS.length; i++) {
-      const key = OCCASIONS[i];
-      const data = s[key];
-      const styles = (data?.bestStyles ?? []).slice(0, 2).join(" and ");
-      const label = OCCASION_LABELS[key].label.toLowerCase();
-      const prompt = [
-        `Fashion edit: show this SAME person wearing a ${label} outfit — ${styles}.`,
-        `Colours harmonious with their ${a.season} colour season.`,
-        `MUST keep IDENTICAL: face, skin tone, body proportions.`,
-        `Full-length or 3/4 view, natural standing pose, professional fashion photography.`,
-      ].join(" ");
-
-      try {
-        const res = await fetch("/api/generate-visuals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl, prompts: [{ key, prompt }] }),
-        });
-        const result = await res.json();
-        map[key] = result.images?.[0]?.imageData ?? null;
-      } catch {
-        map[key] = null;
+      if (_styleCache?.photoKey === photoKey) {
+        setStyleImages(_styleCache.images);
+        setGenDone(OCCASIONS.length);
+        setPhase("done");
+        return;
       }
-      setGenDone(i + 1);
-    }
 
-    _styleCache = { photoKey, images: map };
-    setStyleImages(map);
+      setGenDone(0);
+      setPhase("generating");
+
+      const map: Record<string, string | null> = {};
+
+      for (let i = 0; i < OCCASIONS.length; i++) {
+        const key = OCCASIONS[i];
+        const data = s[key];
+        const styles = (data?.bestStyles ?? []).slice(0, 2).join(" and ");
+        const label = OCCASION_LABELS[key].label.toLowerCase();
+        const prompt = [
+          `Fashion edit: show this SAME person wearing a ${label} outfit — ${styles}.`,
+          `Colours harmonious with their ${a.season} colour season.`,
+          `MUST keep IDENTICAL: face, skin tone, body proportions.`,
+          `Full-length or 3/4 view, natural standing pose, professional fashion photography.`,
+        ].join(" ");
+
+        try {
+          const res = await fetch("/api/generate-visuals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageDataUrl, prompts: [{ key, prompt }] }),
+          });
+          const result = await res.json();
+          map[key] = result.images?.[0]?.imageData ?? null;
+        } catch {
+          map[key] = null;
+        }
+        setGenDone(i + 1);
+      }
+
+      _styleCache = { photoKey, images: map };
+      setStyleImages(map);
+    } catch {
+      // swallow all errors — text content still renders
+    }
     setPhase("done");
   }, []);
 

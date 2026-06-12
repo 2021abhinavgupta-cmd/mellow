@@ -82,57 +82,61 @@ export default function HairResultsPage() {
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [genDone, setGenDone] = useState(0);
-  const [genTotal, setGenTotal] = useState(4);
+  const [genTotal, setGenTotal] = useState(3);
   const [hairImages, setHairImages] = useState<Record<string, string | null>>({});
 
   const generateImages = useCallback(async (imageDataUrl: string, h: ColorAnalysis["hair"]) => {
-    const styles = h?.mostFlattering ?? [];
-    if (!styles.length) { setPhase("done"); return; }
+    // Never throw — image generation failure must not crash the page
+    try {
+      const allStyles = h?.mostFlattering ?? [];
+      const styles = allStyles.slice(0, 3); // max 3 images
+      if (!styles.length) { setPhase("done"); return; }
 
-    const photoKey = imageDataUrl.slice(0, 80);
+      const photoKey = imageDataUrl.slice(0, 80);
 
-    // Module-level cache hit
-    if (_hairCache?.photoKey === photoKey) {
-      setHairImages(_hairCache.images);
-      setGenDone(styles.length);
-      setPhase("done");
-      return;
-    }
-
-    setGenTotal(styles.length);
-    setGenDone(0);
-    setPhase("generating");
-
-    const map: Record<string, string | null> = {};
-
-    // Sequential — one at a time to respect 5 images/min rate limit
-    for (let i = 0; i < styles.length; i++) {
-      const style = styles[i];
-      const key = `mf-${i}`;
-      const prompt = [
-        `Photo editing: restyle ONLY the hair to "${style.name}". ${style.description}.`,
-        `MUST keep IDENTICAL: face, skin tone, eyes, nose, lips, expression, clothing, background.`,
-        `ONLY change: hair length, texture, layering, styling.`,
-        `Person has ${h.faceShape} face and ${h.observedHairType} hair naturally.`,
-        `Conservative minimal edit — same person, different hairstyle only.`,
-      ].join(" ");
-
-      try {
-        const res = await fetch("/api/generate-visuals", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageDataUrl, prompts: [{ key, prompt }] }),
-        });
-        const data = await res.json();
-        map[key] = data.images?.[0]?.imageData ?? null;
-      } catch {
-        map[key] = null;
+      if (_hairCache?.photoKey === photoKey) {
+        setHairImages(_hairCache.images);
+        setGenDone(styles.length);
+        setPhase("done");
+        return;
       }
-      setGenDone(i + 1);
-    }
 
-    _hairCache = { photoKey, images: map };
-    setHairImages(map);
+      setGenTotal(styles.length);
+      setGenDone(0);
+      setPhase("generating");
+
+      const map: Record<string, string | null> = {};
+
+      for (let i = 0; i < styles.length; i++) {
+        const style = styles[i];
+        const key = `mf-${i}`;
+        const prompt = [
+          `Photo editing: restyle ONLY the hair to "${style.name}". ${style.description}.`,
+          `MUST keep IDENTICAL: face, skin tone, eyes, nose, lips, expression, clothing, background.`,
+          `ONLY change: hair length, texture, layering, styling.`,
+          `Person has ${h.faceShape} face and ${h.observedHairType} hair naturally.`,
+          `Conservative minimal edit — same person, different hairstyle only.`,
+        ].join(" ");
+
+        try {
+          const res = await fetch("/api/generate-visuals", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ imageDataUrl, prompts: [{ key, prompt }] }),
+          });
+          const data = await res.json();
+          map[key] = data.images?.[0]?.imageData ?? null;
+        } catch {
+          map[key] = null;
+        }
+        setGenDone(i + 1);
+      }
+
+      _hairCache = { photoKey, images: map };
+      setHairImages(map);
+    } catch {
+      // swallow all errors — text content still renders
+    }
     setPhase("done");
   }, []);
 
