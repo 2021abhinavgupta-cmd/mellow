@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
+import { compressDataUrl } from "@/app/lib/compress-image";
 
 // ── Primitives ─────────────────────────────────────────────────────────────────
 
@@ -127,8 +128,17 @@ export default function HairResultsPage() {
       setGenDone(i + 1);
     }
 
-    setHairImages(map);
-    sessionStorage.setItem(cacheKey, JSON.stringify(map));
+    // Compress PNG→JPEG before caching to avoid sessionStorage quota
+    const compressed: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(map)) {
+      compressed[k] = v ? await compressDataUrl(v) : null;
+    }
+    setHairImages(compressed);
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(compressed));
+    } catch {
+      // quota exceeded — images still in memory for this session
+    }
     setPhase("done");
   }, []);
 
