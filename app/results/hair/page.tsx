@@ -6,7 +6,9 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
-import { compressDataUrl } from "@/app/lib/compress-image";
+
+// Module-level cache — survives client-side navigation, auto-invalidates on new photo
+let _hairCache: { photoKey: string; images: Record<string, string | null> } | null = null;
 
 // ── Primitives ─────────────────────────────────────────────────────────────────
 
@@ -87,10 +89,11 @@ export default function HairResultsPage() {
     const styles = h?.mostFlattering ?? [];
     if (!styles.length) { setPhase("done"); return; }
 
-    const cacheKey = "mellow_hair_images";
-    const cached = sessionStorage.getItem(cacheKey);
-    if (cached) {
-      setHairImages(JSON.parse(cached));
+    const photoKey = imageDataUrl.slice(0, 80);
+
+    // Module-level cache hit
+    if (_hairCache?.photoKey === photoKey) {
+      setHairImages(_hairCache.images);
       setGenDone(styles.length);
       setPhase("done");
       return;
@@ -128,17 +131,8 @@ export default function HairResultsPage() {
       setGenDone(i + 1);
     }
 
-    // Compress PNG→JPEG before caching to avoid sessionStorage quota
-    const compressed: Record<string, string | null> = {};
-    for (const [k, v] of Object.entries(map)) {
-      compressed[k] = v ? await compressDataUrl(v) : null;
-    }
-    setHairImages(compressed);
-    try {
-      sessionStorage.setItem(cacheKey, JSON.stringify(compressed));
-    } catch {
-      // quota exceeded — images still in memory for this session
-    }
+    _hairCache = { photoKey, images: map };
+    setHairImages(map);
     setPhase("done");
   }, []);
 

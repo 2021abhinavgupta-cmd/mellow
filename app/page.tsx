@@ -95,8 +95,6 @@ export default function Home() {
     if (!image) return;
     localStorage.removeItem("mellow_analysis");
     localStorage.setItem("mellow_image", image);
-    sessionStorage.removeItem("mellow_hair_images");
-    sessionStorage.removeItem("mellow_style_images");
     router.push("/results");
   }, [image, router]);
 
