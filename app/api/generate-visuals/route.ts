@@ -1,6 +1,8 @@
 import OpenAI, { toFile } from "openai";
 import { NextRequest } from "next/server";
 
+export const maxDuration = 60;
+
 let client: OpenAI | null = null;
 function getClient() {
   if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
