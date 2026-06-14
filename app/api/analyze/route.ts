@@ -18,7 +18,7 @@ function getGeminiClient() {
 
 async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
   const model = getGeminiClient().getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.0-flash-001",
     generationConfig: { responseMimeType: "application/json" },
   });
   const base64 = imageDataUrl.split(",")[1];
