@@ -1,12 +1,33 @@
 import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
 
-let client: OpenAI | null = null;
+let openaiClient: OpenAI | null = null;
 function getClient() {
-  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return client;
+  if (!openaiClient) openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openaiClient;
+}
+
+let geminiClient: GoogleGenerativeAI | null = null;
+function getGeminiClient() {
+  if (!geminiClient) geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  return geminiClient;
+}
+
+async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
+  const model = getGeminiClient().getGenerativeModel({
+    model: "gemini-2.0-flash",
+    generationConfig: { responseMimeType: "application/json" },
+  });
+  const base64 = imageDataUrl.split(",")[1];
+  const mimeType = imageDataUrl.includes("image/png") ? "image/png" : "image/jpeg";
+  const result = await model.generateContent([
+    { text: SYSTEM_PROMPT + "\n\nAnalyse this person's colouring and return the full JSON." },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+  return result.response.text();
 }
 
 const SYSTEM_PROMPT = `You are a professional personal colour and makeup analyst specialising in seasonal colour theory.
@@ -154,37 +175,37 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Invalid image data" }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json(
-        { error: "OPENAI_API_KEY not configured" },
-        { status: 500 }
-      );
-    }
-
-    const response = await getClient().chat.completions.create({
-      model: "gpt-4o",
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
+    // Try OpenAI first
+    if (process.env.OPENAI_API_KEY) {
+      try {
+        const response = await getClient().chat.completions.create({
+          model: "gpt-4o",
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
             {
-              type: "image_url",
-              image_url: { url: imageDataUrl, detail: "high" },
-            },
-            {
-              type: "text",
-              text: "Analyse this person's colouring and return the full JSON makeup and colour analysis.",
+              role: "user",
+              content: [
+                { type: "image_url", image_url: { url: imageDataUrl, detail: "high" } },
+                { type: "text", text: "Analyse this person's colouring and return the full JSON makeup and colour analysis." },
+              ],
             },
           ],
-        },
-      ],
-      max_tokens: 5000,
-    });
+          max_tokens: 5000,
+        });
+        const content = response.choices[0].message.content ?? "{}";
+        return Response.json(JSON.parse(content));
+      } catch (openaiErr) {
+        console.warn("[analyze] OpenAI failed, falling back to Gemini:", openaiErr instanceof Error ? openaiErr.message : openaiErr);
+      }
+    }
 
-    const content = response.choices[0].message.content ?? "{}";
-    return Response.json(JSON.parse(content));
+    // Gemini fallback
+    if (!process.env.GEMINI_API_KEY) {
+      return Response.json({ error: "No API keys configured" }, { status: 500 });
+    }
+    const geminiText = await analyzeWithGemini(imageDataUrl);
+    return Response.json(JSON.parse(geminiText));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[analyze]", message);
