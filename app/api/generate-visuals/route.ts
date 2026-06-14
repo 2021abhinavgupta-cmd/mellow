@@ -1,28 +1,71 @@
 import OpenAI, { toFile } from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
 
-let client: OpenAI | null = null;
-function getClient() {
-  if (!client) client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return client;
+// ── OpenAI client ─────────────────────────────────────────────────────────────
+
+let openaiClient: OpenAI | null = null;
+function getOpenAI() {
+  if (!openaiClient) openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return openaiClient;
 }
+
+// ── Gemini client ─────────────────────────────────────────────────────────────
+
+let geminiClient: GoogleGenerativeAI | null = null;
+function getGemini() {
+  if (!geminiClient) geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  return geminiClient;
+}
+
+async function generateWithGemini(
+  base64: string,
+  mimeType: string,
+  key: string,
+  prompt: string
+): Promise<{ key: string; imageData: string | null }> {
+  const model = getGemini().getGenerativeModel({
+    model: "gemini-2.0-flash-exp",
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    generationConfig: { responseModalities: ["image", "text"] } as any,
+  });
+
+  const result = await model.generateContent([
+    { text: prompt },
+    { inlineData: { mimeType, data: base64 } },
+  ]);
+
+  const imagePart = result.response.candidates?.[0]?.content?.parts?.find(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (p: any) => p.inlineData
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ) as any;
+
+  if (imagePart?.inlineData?.data) {
+    const { mimeType: outMime, data } = imagePart.inlineData;
+    return { key, imageData: `data:${outMime};base64,${data}` };
+  }
+  return { key, imageData: null };
+}
+
+// ── OpenAI generation with retry ──────────────────────────────────────────────
 
 async function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function generateOne(
+async function generateWithOpenAI(
   buffer: Buffer,
   key: string,
   prompt: string,
-  retries = 2
+  retries = 1
 ): Promise<{ key: string; imageData: string | null }> {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const imageFile = await toFile(buffer, "photo.jpg", { type: "image/jpeg" });
-      const response = await getClient().images.edit({
+      const response = await getOpenAI().images.edit({
         model: "gpt-image-1",
         image: imageFile,
         prompt,
@@ -34,7 +77,6 @@ async function generateOne(
     } catch (err) {
       const status = (err as { status?: number })?.status;
       if (status === 429 && attempt < retries) {
-        // wait 14s then retry (rate limit resets each minute, limit is 5/min)
         await sleep(14000);
         continue;
       }
@@ -43,6 +85,8 @@ async function generateOne(
   }
   return { key, imageData: null };
 }
+
+// ── POST handler ──────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,23 +99,37 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: "Invalid image" }, { status: 400 });
     }
 
-    if (!process.env.OPENAI_API_KEY) {
-      return Response.json({ error: "OPENAI_API_KEY not configured" }, { status: 500 });
-    }
-
     const base64 = imageDataUrl.split(",")[1];
+    const mimeType = imageDataUrl.includes("image/png") ? "image/png" : "image/jpeg";
     const buffer = Buffer.from(base64, "base64");
 
-    // Sequential to respect 5 images/min rate limit
+    const hasOpenAI = !!process.env.OPENAI_API_KEY;
+    const hasGemini = !!process.env.GEMINI_API_KEY;
+
     const images: { key: string; imageData: string | null }[] = [];
+
     for (const { key, prompt } of prompts) {
-      try {
-        const result = await generateOne(buffer, key, prompt);
-        images.push(result);
-      } catch (err) {
-        console.error(`[generate-visuals] ${key}:`, err);
-        images.push({ key, imageData: null });
+      let result: { key: string; imageData: string | null } = { key, imageData: null };
+
+      // Try OpenAI first
+      if (hasOpenAI) {
+        try {
+          result = await generateWithOpenAI(buffer, key, prompt);
+        } catch (err) {
+          console.warn(`[generate-visuals] OpenAI failed for ${key}, trying Gemini:`, err instanceof Error ? err.message : err);
+        }
       }
+
+      // Gemini fallback if OpenAI failed or unavailable
+      if (!result.imageData && hasGemini) {
+        try {
+          result = await generateWithGemini(base64, mimeType, key, prompt);
+        } catch (err) {
+          console.error(`[generate-visuals] Gemini also failed for ${key}:`, err instanceof Error ? err.message : err);
+        }
+      }
+
+      images.push(result);
     }
 
     return Response.json({ images });
