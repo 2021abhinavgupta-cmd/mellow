@@ -16,7 +16,7 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY;
 
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -27,7 +27,7 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
             { inline_data: { mime_type: mimeType, data: base64 } },
           ],
         }],
-        generationConfig: { responseMimeType: "application/json" },
+        generationConfig: { temperature: 0.2 },
       }),
     }
   );
@@ -38,7 +38,9 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
   }
 
   const json = await res.json();
-  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  const raw = json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+  // strip markdown fences if model wraps JSON
+  return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
 const SYSTEM_PROMPT = `You are a professional personal colour and makeup analyst specialising in seasonal colour theory.
