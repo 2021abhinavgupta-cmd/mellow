@@ -1,5 +1,4 @@
 import OpenAI from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
@@ -10,24 +9,36 @@ function getClient() {
   return openaiClient;
 }
 
-let geminiClient: GoogleGenerativeAI | null = null;
-function getGeminiClient() {
-  if (!geminiClient) geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  return geminiClient;
-}
-
+// Direct REST call to v1 (not v1beta) for stable model access
 async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
-  const model = getGeminiClient().getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" },
-  });
   const base64 = imageDataUrl.split(",")[1];
   const mimeType = imageDataUrl.includes("image/png") ? "image/png" : "image/jpeg";
-  const result = await model.generateContent([
-    { text: SYSTEM_PROMPT + "\n\nAnalyse this person's colouring and return the full JSON." },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
-  return result.response.text();
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: SYSTEM_PROMPT + "\n\nAnalyse this person's colouring and return the full JSON." },
+            { inline_data: { mime_type: mimeType, data: base64 } },
+          ],
+        }],
+        generationConfig: { responseMimeType: "application/json" },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Gemini error ${res.status}: ${err}`);
+  }
+
+  const json = await res.json();
+  return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
 }
 
 const SYSTEM_PROMPT = `You are a professional personal colour and makeup analyst specialising in seasonal colour theory.

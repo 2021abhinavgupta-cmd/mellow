@@ -1,5 +1,4 @@
 import OpenAI, { toFile } from "openai";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { NextRequest } from "next/server";
 
 export const maxDuration = 60;
@@ -12,13 +11,7 @@ function getOpenAI() {
   return openaiClient;
 }
 
-// ── Gemini client ─────────────────────────────────────────────────────────────
-
-let geminiClient: GoogleGenerativeAI | null = null;
-function getGemini() {
-  if (!geminiClient) geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  return geminiClient;
-}
+// ── Gemini image generation via v1beta (imagegeneration models live here) ────
 
 async function generateWithGemini(
   base64: string,
@@ -26,26 +19,35 @@ async function generateWithGemini(
   key: string,
   prompt: string
 ): Promise<{ key: string; imageData: string | null }> {
-  const model = getGemini().getGenerativeModel({
-    model: "gemini-2.0-flash-exp",
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    generationConfig: { responseModalities: ["image", "text"] } as any,
-  });
+  const apiKey = process.env.GEMINI_API_KEY;
 
-  const result = await model.generateContent([
-    { text: prompt },
-    { inlineData: { mimeType, data: base64 } },
-  ]);
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: mimeType, data: base64 } },
+          ],
+        }],
+        generationConfig: { responseModalities: ["IMAGE", "TEXT"] },
+      }),
+    }
+  );
 
-  const imagePart = result.response.candidates?.[0]?.content?.parts?.find(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (p: any) => p.inlineData
+  if (!res.ok) {
+    throw new Error(`Gemini image error ${res.status}: ${await res.text()}`);
+  }
+
+  const json = await res.json();
+  const parts = json.candidates?.[0]?.content?.parts ?? [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ) as any;
-
-  if (imagePart?.inlineData?.data) {
-    const { mimeType: outMime, data } = imagePart.inlineData;
-    return { key, imageData: `data:${outMime};base64,${data}` };
+  const imgPart = parts.find((p: any) => p.inline_data?.mime_type?.startsWith("image/"));
+  if (imgPart?.inline_data) {
+    return { key, imageData: `data:${imgPart.inline_data.mime_type};base64,${imgPart.inline_data.data}` };
   }
   return { key, imageData: null };
 }
