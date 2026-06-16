@@ -332,7 +332,7 @@ export default function StyleResultsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {/* Generated outfit image */}
               <div
-                className={`relative rounded-xl overflow-hidden ${styleImages[activeOccasion] ? "cursor-pointer" : ""}`}
+                className={`relative rounded-xl overflow-hidden group ${styleImages[activeOccasion] ? "cursor-pointer" : ""}`}
                 style={{ aspectRatio: "3/4" }}
                 onClick={styleImages[activeOccasion] ? () => setLightboxSrc(styleImages[activeOccasion]!) : undefined}
               >
@@ -349,11 +349,26 @@ export default function StyleResultsPage() {
                   </div>
                 )}
                 {styleImages[activeOccasion] && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-brown-dark/60 to-transparent p-3">
-                    <p className="font-sans text-[0.6rem] tracking-widest uppercase text-cream/80">
-                      {OCCASION_LABELS[activeOccasion].subtitle}
-                    </p>
-                  </div>
+                  <>
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-brown-dark/60 to-transparent p-3">
+                      <p className="font-sans text-[0.6rem] tracking-widest uppercase text-cream/80">
+                        {OCCASION_LABELS[activeOccasion].subtitle}
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const a = document.createElement("a");
+                        a.href = styleImages[activeOccasion]!;
+                        a.download = `mellow-${activeOccasion}-outfit.png`;
+                        a.click();
+                      }}
+                      className="print:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                      title="Download image"
+                    >
+                      <Download className="w-4 h-4 text-white" strokeWidth={2} />
+                    </button>
+                  </>
                 )}
               </div>
 

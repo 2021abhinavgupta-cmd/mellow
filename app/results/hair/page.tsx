@@ -21,10 +21,19 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 }
 
 function StyleImageCard({ name, imageData, onClick }: { name: string; imageData: string | null; onClick?: () => void }) {
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!imageData) return;
+    const a = document.createElement("a");
+    a.href = imageData;
+    a.download = `mellow-${name.toLowerCase().replace(/\s+/g, "-")}.png`;
+    a.click();
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <div
-        className={`relative rounded-xl overflow-hidden ${imageData ? "cursor-pointer" : ""}`}
+        className={`relative rounded-xl overflow-hidden group ${imageData ? "cursor-pointer" : ""}`}
         style={{ aspectRatio: "3/4" }}
         onClick={imageData ? onClick : undefined}
       >
@@ -37,9 +46,18 @@ function StyleImageCard({ name, imageData, onClick }: { name: string; imageData:
           </div>
         )}
         {imageData && (
-          <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
-            <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
-          </div>
+          <>
+            <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shadow-sm">
+              <Check className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            </div>
+            <button
+              onClick={handleDownload}
+              className="print:hidden absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+              title="Download image"
+            >
+              <Download className="w-3.5 h-3.5 text-white" strokeWidth={2} />
+            </button>
+          </>
         )}
       </div>
       <p className="font-sans text-[0.62rem] font-medium text-brown-dark text-center uppercase tracking-wide leading-tight px-1">
