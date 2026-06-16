@@ -43,8 +43,13 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
   return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
-const SYSTEM_PROMPT = `You are a professional personal colour and makeup analyst specialising in seasonal colour theory.
-Analyse the person's face — skin tone, undertone, eye colour, hair colour — and return detailed, specific, actionable makeup and colour guidance.
+const SYSTEM_PROMPT = `You are a professional personal colour, makeup, and style analyst specialising in seasonal colour theory.
+Analyse the person's face — skin tone, undertone, eye colour, hair colour — and return detailed, specific, actionable guidance.
+
+CRITICAL: First detect the person's apparent gender from the photo. All hairstyle recommendations (mostFlattering, otherOptions, bangs, updos, bestParting, goal) MUST be gender-appropriate:
+- Male presenting: recommend men's cuts only (e.g. Textured Crop, Side Part, Pompadour, Fade, Crew Cut, Quiff, Slick Back, French Crop, Undercut, Buzz Cut, Caesar Cut)
+- Female presenting: recommend women's styles only (e.g. Soft Layers, Beach Waves, Bob, Lob, Curtain Bangs)
+Never mix. A man should never get "Loose Bun" or "Half-Up Half-Down" as primary recommendations.
 
 Return ONLY valid JSON (no markdown, no explanation) with this exact shape:
 
@@ -136,17 +141,17 @@ Return ONLY valid JSON (no markdown, no explanation) with this exact shape:
     "faceShapeDescription": "1–2 sentences: what defines this face shape and why certain styles work",
     "faceShapeTraits": ["3 short traits e.g. Softens Face", "Adds Volume", "Frames Features"],
     "mostFlattering": [
-      { "name": "e.g. Soft Layers", "description": "1 sentence why this works for their face shape" },
+      { "name": "gender-appropriate style e.g. Textured Crop (male) or Soft Layers (female)", "description": "1 sentence why this works for their face shape" },
       { "name": "...", "description": "..." },
       { "name": "...", "description": "..." },
       { "name": "...", "description": "..." }
     ],
-    "otherOptions": ["4 hairstyle names that also suit them"],
-    "bangs": ["2 bang styles e.g. Curtain Bangs, Side-Swept Bangs"],
-    "updos": ["3 updo options e.g. Loose Bun, Half-Up Half-Down"],
-    "bestParting": "e.g. Deep Side Part",
-    "tips": ["4 practical hair tips specific to their face shape and hair type"],
-    "goal": "e.g. Soft, Voluminous & Framed",
+    "otherOptions": ["4 gender-appropriate hairstyle names that also suit them"],
+    "bangs": ["2 fringe/bang styles appropriate for their gender — for men use e.g. Textured Fringe, Side-Swept; for women e.g. Curtain Bangs, Side-Swept Bangs"],
+    "updos": ["3 styling options — for men e.g. Slicked Back, Pomaded Look, Natural Texture; for women e.g. Loose Bun, Half-Up Half-Down"],
+    "bestParting": "e.g. Deep Side Part or No Part (Textured) — gender-appropriate",
+    "tips": ["4 practical hair tips specific to their face shape, hair type, and gender"],
+    "goal": "e.g. Clean, Textured & Sharp (male) or Soft, Voluminous & Framed (female)",
     "observedHairType": "e.g. Wavy, Medium Density"
   },
 
