@@ -108,6 +108,12 @@ export default function StyleResultsPage() {
       setGenDone(0);
       setPhase("generating");
 
+      const gender = (typeof window !== "undefined" ? localStorage.getItem("mellow_gender") : null) ?? "female";
+      const isMale = gender === "male";
+      const genderNote = isMale
+        ? "This is a MALE person. Show him in masculine men's clothing only (shirts, trousers, suits, kurtas). No dresses, skirts, or feminine items."
+        : "This is a FEMALE person. Show her in feminine women's clothing only (dresses, skirts, blouses). No men's suits or masculine items.";
+
       const map: Record<string, string | null> = {};
 
       for (let i = 0; i < OCCASIONS.length; i++) {
@@ -117,6 +123,7 @@ export default function StyleResultsPage() {
         const label = OCCASION_LABELS[key].label.toLowerCase();
         const prompt = [
           `Fashion edit: show this SAME person wearing a ${label} outfit — ${styles}.`,
+          genderNote,
           `Colours harmonious with their ${a.season} colour season.`,
           `MUST keep IDENTICAL: face, skin tone, body proportions.`,
           `Full-length or 3/4 view, natural standing pose, professional fashion photography.`,
@@ -154,10 +161,11 @@ export default function StyleResultsPage() {
         await generateImages(imageDataUrl, a);
         return;
       }
+      const gender = localStorage.getItem("mellow_gender") ?? "female";
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl, gender }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);

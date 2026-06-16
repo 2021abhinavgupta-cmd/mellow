@@ -37,6 +37,7 @@ const fadeUp = (delay: number) => ({
 export default function Home() {
   const router = useRouter();
   const [image, setImage] = useState<string | null>(null);
+  const [gender, setGender] = useState<"male" | "female" | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -62,6 +63,7 @@ export default function Home() {
       const raw = e.target?.result as string;
       const compressed = await compressImage(raw);
       setImage(compressed);
+      setGender(null);
     };
     reader.readAsDataURL(file);
   }, [compressImage]);
@@ -92,11 +94,14 @@ export default function Home() {
   );
 
   const analyze = useCallback(() => {
-    if (!image) return;
+    if (!image || !gender) return;
     localStorage.removeItem("mellow_analysis");
+    sessionStorage.removeItem("mellow_hair_images");
+    sessionStorage.removeItem("mellow_style_images");
     localStorage.setItem("mellow_image", image);
+    localStorage.setItem("mellow_gender", gender);
     router.push("/results");
-  }, [image, router]);
+  }, [image, gender, router]);
 
   return (
     <main className="min-h-screen bg-cream">
@@ -217,15 +222,42 @@ export default function Home() {
           )}
 
           {image && (
-            <motion.button
+            <motion.div
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4 }}
-              onClick={analyze}
-              className="mt-5 w-full bg-brown-dark text-cream py-4 rounded-xl font-sans tracking-[0.2em] text-sm uppercase hover:bg-brown-mid transition-colors duration-300"
+              className="mt-5 space-y-4"
             >
-              Analyze My Style
-            </motion.button>
+              {/* Gender picker */}
+              <div>
+                <p className="font-sans text-[0.6rem] tracking-[0.3em] uppercase text-brown-mid text-center mb-3">
+                  I am
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  {(["female", "male"] as const).map((g) => (
+                    <button
+                      key={g}
+                      onClick={() => setGender(g)}
+                      className={`py-3 rounded-xl font-sans text-sm tracking-[0.15em] uppercase transition-all duration-200 border ${
+                        gender === g
+                          ? "bg-brown-dark text-cream border-brown-dark"
+                          : "bg-white/50 text-brown-mid border-brown-light hover:bg-white/80 hover:border-brown-mid"
+                      }`}
+                    >
+                      {g === "female" ? "Female" : "Male"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={analyze}
+                disabled={!gender}
+                className="w-full bg-brown-dark text-cream py-4 rounded-xl font-sans tracking-[0.2em] text-sm uppercase hover:bg-brown-mid transition-colors duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Analyze My Style
+              </button>
+            </motion.div>
           )}
 
           {/* Privacy badge */}

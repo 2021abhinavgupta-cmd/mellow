@@ -78,10 +78,11 @@ export default function ColorResultsPage() {
         setLoading(false);
         return;
       }
+      const gender = localStorage.getItem("mellow_gender") ?? "female";
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl, gender }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);

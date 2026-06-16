@@ -10,7 +10,7 @@ function getClient() {
 }
 
 // Direct REST call to v1 (not v1beta) for stable model access
-async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
+async function analyzeWithGemini(imageDataUrl: string, systemPrompt: string): Promise<string> {
   const base64 = imageDataUrl.split(",")[1];
   const mimeType = imageDataUrl.includes("image/png") ? "image/png" : "image/jpeg";
   const apiKey = process.env.GEMINI_API_KEY;
@@ -23,7 +23,7 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
       body: JSON.stringify({
         contents: [{
           parts: [
-            { text: SYSTEM_PROMPT + "\n\nAnalyse this person's colouring and return the full JSON." },
+            { text: systemPrompt + "\n\nAnalyse this person's colouring and return the full JSON." },
             { inline_data: { mime_type: mimeType, data: base64 } },
           ],
         }],
@@ -43,15 +43,27 @@ async function analyzeWithGemini(imageDataUrl: string): Promise<string> {
   return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
-const SYSTEM_PROMPT = `You are a professional personal colour, makeup, and style analyst specialising in seasonal colour theory.
-Analyse the person's face — skin tone, undertone, eye colour, hair colour — and return detailed, specific, actionable guidance.
+function buildSystemPrompt(gender: "male" | "female") {
+  const isMale = gender === "male";
+  const hairExamples = isMale
+    ? "Textured Crop, Side Part, Pompadour, Fade, Crew Cut, Quiff, Slick Back, French Crop, Undercut, Buzz Cut"
+    : "Soft Layers, Beach Waves, Bob, Lob, Curtain Bangs, Collarbone Cut";
+  const styleExamples = isMale
+    ? "everyday: Slim-fit chinos + fitted tee; office: Tailored suit + Oxford shirt; occasions: Tuxedo / Sherwani"
+    : "everyday: High-waisted jeans + wrap top; office: Tailored trousers + blouse; occasions: Wrap dress / gown";
 
-CRITICAL: First detect the person's apparent gender from the photo. All hairstyle recommendations (mostFlattering, otherOptions, bangs, updos, bestParting, goal) MUST be gender-appropriate:
-- Male presenting: recommend men's cuts only (e.g. Textured Crop, Side Part, Pompadour, Fade, Crew Cut, Quiff, Slick Back, French Crop, Undercut, Buzz Cut, Caesar Cut)
-- Female presenting: recommend women's styles only (e.g. Soft Layers, Beach Waves, Bob, Lob, Curtain Bangs)
-Never mix. A man should never get "Loose Bun" or "Half-Up Half-Down" as primary recommendations.
+  return `You are a professional personal colour, makeup, and style analyst specialising in seasonal colour theory.
+The person in this photo is ${isMale ? "MALE" : "FEMALE"}. Use this gender for ALL recommendations — never suggest styles for the opposite gender.
 
-Return ONLY valid JSON (no markdown, no explanation) with this exact shape:
+HAIR — recommend only ${isMale ? "men's" : "women's"} hairstyles. Examples: ${hairExamples}.
+${isMale ? "Do NOT suggest: buns, half-up half-down, updos meant for women, long feminine styles." : "Do NOT suggest: fades, undercuts, crew cuts, or men's cuts."}
+
+STYLE — suggest ${isMale ? "men's" : "women's"} clothing only. Examples: ${styleExamples}.
+${isMale ? "Outfit images should show the man in masculine attire (shirts, trousers, suits, kurtas)." : "Outfit images should show the woman in feminine attire (dresses, skirts, blouses, sarees)."}
+
+Return ONLY valid JSON (no markdown, no explanation) with this exact shape:`;}
+
+const BASE_SCHEMA = `
 
 {
   "season": "e.g. Soft Autumn",
@@ -187,11 +199,14 @@ Return ONLY valid JSON (no markdown, no explanation) with this exact shape:
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageDataUrl } = (await req.json()) as { imageDataUrl: string };
+    const { imageDataUrl, gender } = (await req.json()) as { imageDataUrl: string; gender?: string };
 
     if (!imageDataUrl?.startsWith("data:image/")) {
       return Response.json({ error: "Invalid image data" }, { status: 400 });
     }
+
+    const safeGender: "male" | "female" = gender === "male" ? "male" : "female";
+    const systemPrompt = buildSystemPrompt(safeGender) + BASE_SCHEMA;
 
     // Try OpenAI first
     if (process.env.OPENAI_API_KEY) {
@@ -200,7 +215,7 @@ export async function POST(req: NextRequest) {
           model: "gpt-4o",
           response_format: { type: "json_object" },
           messages: [
-            { role: "system", content: SYSTEM_PROMPT },
+            { role: "system", content: systemPrompt },
             {
               role: "user",
               content: [
@@ -222,7 +237,7 @@ export async function POST(req: NextRequest) {
     if (!process.env.GEMINI_API_KEY) {
       return Response.json({ error: "No API keys configured" }, { status: 500 });
     }
-    const geminiText = await analyzeWithGemini(imageDataUrl);
+    const geminiText = await analyzeWithGemini(imageDataUrl, systemPrompt);
     return Response.json(JSON.parse(geminiText));
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

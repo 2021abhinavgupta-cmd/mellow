@@ -110,6 +110,11 @@ export default function HairResultsPage() {
       setGenDone(0);
       setPhase("generating");
 
+      const gender = (typeof window !== "undefined" ? localStorage.getItem("mellow_gender") : null) ?? "female";
+      const genderNote = gender === "male"
+        ? "This is a MALE person. Apply a men's hairstyle only. Keep masculine features."
+        : "This is a FEMALE person. Apply a women's hairstyle only.";
+
       const map: Record<string, string | null> = {};
 
       for (let i = 0; i < styles.length; i++) {
@@ -117,6 +122,7 @@ export default function HairResultsPage() {
         const key = `mf-${i}`;
         const prompt = [
           `Photo editing: restyle ONLY the hair to "${style.name}". ${style.description}.`,
+          genderNote,
           `MUST keep IDENTICAL: face, skin tone, eyes, nose, lips, expression, clothing, background.`,
           `ONLY change: hair length, texture, layering, styling.`,
           `Person has ${h.faceShape} face and ${h.observedHairType} hair naturally.`,
@@ -155,10 +161,11 @@ export default function HairResultsPage() {
         await generateImages(imageDataUrl, a.hair);
         return;
       }
+      const gender = localStorage.getItem("mellow_gender") ?? "female";
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl }),
+        body: JSON.stringify({ imageDataUrl, gender }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);
