@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
+import { hairImageCache } from "@/app/lib/imageCache";
 
 // Module-level cache — survives client-side navigation, auto-invalidates on new photo
 let _hairCache: { photoKey: string; images: Record<string, string | null> } | null = null;
@@ -118,6 +119,8 @@ export default function HairResultsPage() {
       const photoKey = imageDataUrl.slice(0, 80);
 
       if (_hairCache?.photoKey === photoKey) {
+        hairImageCache.photoKey = photoKey;
+        hairImageCache.images = _hairCache.images;
         setHairImages(_hairCache.images);
         setGenDone(styles.length);
         setPhase("done");
@@ -130,6 +133,8 @@ export default function HairResultsPage() {
         if (ss) {
           const cached = JSON.parse(ss) as Record<string, string | null>;
           _hairCache = { photoKey, images: cached };
+          hairImageCache.photoKey = photoKey;
+          hairImageCache.images = cached;
           setHairImages(cached);
           setGenDone(styles.length);
           setPhase("done");
@@ -175,6 +180,8 @@ export default function HairResultsPage() {
       }
 
       _hairCache = { photoKey, images: map };
+      hairImageCache.photoKey = photoKey;
+      hairImageCache.images = map;
       try { sessionStorage.setItem("mellow_hair_images", JSON.stringify(map)); } catch { /* quota */ }
       setHairImages(map);
     } catch {

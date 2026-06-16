@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Printer, CheckCircle2, XCircle, Scissors, Sparkles } from "lucide-react";
 import type { ColorAnalysis, NamedSwatch } from "@/app/lib/types";
+import { hairImageCache, styleImageCache } from "@/app/lib/imageCache";
 
 // ── Shared primitives ──────────────────────────────────────────────────────────
 
@@ -586,15 +587,24 @@ export default function PrintAllPage() {
     setPhoto(img);
     setAnalysis(JSON.parse(ana) as ColorAnalysis);
 
-    try {
-      const hi = sessionStorage.getItem("mellow_hair_images");
-      if (hi) setHairImages(JSON.parse(hi) as Record<string, string | null>);
-    } catch { /* ignore */ }
+    // Try shared module cache first (same tab navigation, most reliable)
+    if (hairImageCache.images) {
+      setHairImages(hairImageCache.images);
+    } else {
+      try {
+        const hi = sessionStorage.getItem("mellow_hair_images");
+        if (hi) setHairImages(JSON.parse(hi) as Record<string, string | null>);
+      } catch { /* ignore */ }
+    }
 
-    try {
-      const si = sessionStorage.getItem("mellow_style_images");
-      if (si) setStyleImages(JSON.parse(si) as Record<string, string | null>);
-    } catch { /* ignore */ }
+    if (styleImageCache.images) {
+      setStyleImages(styleImageCache.images);
+    } else {
+      try {
+        const si = sessionStorage.getItem("mellow_style_images");
+        if (si) setStyleImages(JSON.parse(si) as Record<string, string | null>);
+      } catch { /* ignore */ }
+    }
   }, []);
 
   if (!analysis || !photo) {

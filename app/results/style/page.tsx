@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, CheckCircle2, XCircle, Sparkles, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
+import { styleImageCache } from "@/app/lib/imageCache";
 
 // Module-level cache — survives client-side navigation, auto-invalidates on new photo
 let _styleCache: { photoKey: string; images: Record<string, string | null> } | null = null;
@@ -99,6 +100,8 @@ export default function StyleResultsPage() {
       const photoKey = imageDataUrl.slice(0, 80);
 
       if (_styleCache?.photoKey === photoKey) {
+        styleImageCache.photoKey = photoKey;
+        styleImageCache.images = _styleCache.images;
         setStyleImages(_styleCache.images);
         setGenDone(OCCASIONS.length);
         setPhase("done");
@@ -111,6 +114,8 @@ export default function StyleResultsPage() {
         if (ss) {
           const cached = JSON.parse(ss) as Record<string, string | null>;
           _styleCache = { photoKey, images: cached };
+          styleImageCache.photoKey = photoKey;
+          styleImageCache.images = cached;
           setStyleImages(cached);
           setGenDone(OCCASIONS.length);
           setPhase("done");
@@ -161,6 +166,8 @@ export default function StyleResultsPage() {
       setGenDone(OCCASIONS.length);
 
       _styleCache = { photoKey, images: map };
+      styleImageCache.photoKey = photoKey;
+      styleImageCache.images = map;
       try { sessionStorage.setItem("mellow_style_images", JSON.stringify(map)); } catch { /* quota */ }
       setStyleImages(map);
     } catch {
