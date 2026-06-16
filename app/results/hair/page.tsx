@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 
@@ -106,6 +106,19 @@ export default function HairResultsPage() {
         return;
       }
 
+      // Fallback: sessionStorage survives client-side navigation even if module cache cleared
+      try {
+        const ss = sessionStorage.getItem("mellow_hair_images");
+        if (ss) {
+          const cached = JSON.parse(ss) as Record<string, string | null>;
+          _hairCache = { photoKey, images: cached };
+          setHairImages(cached);
+          setGenDone(styles.length);
+          setPhase("done");
+          return;
+        }
+      } catch { /* ignore */ }
+
       setGenTotal(styles.length);
       setGenDone(0);
       setPhase("generating");
@@ -144,6 +157,7 @@ export default function HairResultsPage() {
       }
 
       _hairCache = { photoKey, images: map };
+      try { sessionStorage.setItem("mellow_hair_images", JSON.stringify(map)); } catch { /* quota */ }
       setHairImages(map);
     } catch {
       // swallow all errors — text content still renders
@@ -229,7 +243,7 @@ export default function HairResultsPage() {
           </button>
         </div>
       )}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav className="print:hidden flex items-center justify-between px-6 md:px-12 py-5">
         <button
           onClick={() => router.push("/results/makeup")}
           className="flex items-center gap-2 text-brown-mid hover:text-brown-dark transition-colors"
@@ -400,7 +414,7 @@ export default function HairResultsPage() {
         </motion.div>
 
         {/* ── CTA ── */}
-        <motion.div {...fade(0.56)}>
+        <motion.div {...fade(0.56)} className="print:hidden">
           <button
             onClick={() => router.push("/results/style")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
@@ -415,9 +429,18 @@ export default function HairResultsPage() {
           </button>
         </motion.div>
 
+        <motion.button
+          {...fade(0.6)}
+          onClick={() => window.print()}
+          className="print:hidden w-full flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+        >
+          <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+          Download PDF
+        </motion.button>
+
         <motion.p
           {...fade(0.62)}
-          className="text-center font-display text-xl text-brown-dark/40 pb-4"
+          className="print:hidden text-center font-display text-xl text-brown-dark/40 pb-4"
           style={{ fontStyle: "italic", fontWeight: 300 }}
         >
           Your hair, framing your best self.

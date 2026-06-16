@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, Droplets, Layers, Circle, XCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Droplets, Layers, Circle, XCircle, Download } from "lucide-react";
 import type { ColorAnalysis, NamedSwatch } from "@/app/lib/types";
 
 // ── Primitives ────────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ export default function MakeupResultsPage() {
   return (
     <div className="min-h-screen bg-cream pb-24">
 
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav className="print:hidden flex items-center justify-between px-6 md:px-12 py-5">
         <button onClick={() => router.push("/results")} className="flex items-center gap-2 text-brown-mid hover:text-brown-dark transition-colors">
           <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
           <span className="font-sans text-xs tracking-widest uppercase">Colour Analysis</span>
@@ -321,7 +321,7 @@ export default function MakeupResultsPage() {
         </motion.div>
 
         {/* ── CTA: HAIR PAGE ── */}
-        <motion.div {...fade(0.48)}>
+        <motion.div {...fade(0.48)} className="print:hidden">
           <button
             onClick={() => router.push("/results/hair")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
@@ -334,7 +334,16 @@ export default function MakeupResultsPage() {
           </button>
         </motion.div>
 
-        <motion.p {...fade(0.56)} className="text-center font-display text-xl text-brown-dark/40 pb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
+        <motion.button
+          {...fade(0.52)}
+          onClick={() => window.print()}
+          className="print:hidden w-full flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+        >
+          <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+          Download PDF
+        </motion.button>
+
+        <motion.p {...fade(0.56)} className="print:hidden text-center font-display text-xl text-brown-dark/40 pb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
           Enhance your beauty, not hide it.
         </motion.p>
 

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, XCircle, Sparkles, X } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Sparkles, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 
@@ -105,6 +105,19 @@ export default function StyleResultsPage() {
         return;
       }
 
+      // Fallback: sessionStorage survives client-side navigation even if module cache cleared
+      try {
+        const ss = sessionStorage.getItem("mellow_style_images");
+        if (ss) {
+          const cached = JSON.parse(ss) as Record<string, string | null>;
+          _styleCache = { photoKey, images: cached };
+          setStyleImages(cached);
+          setGenDone(OCCASIONS.length);
+          setPhase("done");
+          return;
+        }
+      } catch { /* ignore */ }
+
       setGenDone(0);
       setPhase("generating");
 
@@ -148,6 +161,7 @@ export default function StyleResultsPage() {
       setGenDone(OCCASIONS.length);
 
       _styleCache = { photoKey, images: map };
+      try { sessionStorage.setItem("mellow_style_images", JSON.stringify(map)); } catch { /* quota */ }
       setStyleImages(map);
     } catch {
       // swallow all errors — text content still renders
@@ -234,7 +248,7 @@ export default function StyleResultsPage() {
           </button>
         </div>
       )}
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav className="print:hidden flex items-center justify-between px-6 md:px-12 py-5">
         <button
           onClick={() => router.push("/results/hair")}
           className="flex items-center gap-2 text-brown-mid hover:text-brown-dark transition-colors"
@@ -447,9 +461,18 @@ export default function StyleResultsPage() {
           </Card>
         </motion.div>
 
+        <motion.button
+          {...fade(0.54)}
+          onClick={() => window.print()}
+          className="print:hidden w-full flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+        >
+          <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+          Download PDF
+        </motion.button>
+
         <motion.p
           {...fade(0.56)}
-          className="text-center font-display text-xl text-brown-dark/40 pb-4"
+          className="print:hidden text-center font-display text-xl text-brown-dark/40 pb-4"
           style={{ fontStyle: "italic", fontWeight: 300 }}
         >
           Dress for the woman you are becoming.

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, ArrowRight } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ArrowRight, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 
 function Dot({ hex }: { hex: string }) {
@@ -119,7 +119,7 @@ export default function ColorResultsPage() {
   return (
     <div className="min-h-screen bg-cream pb-24">
 
-      <nav className="flex items-center justify-between px-6 md:px-12 py-5">
+      <nav className="print:hidden flex items-center justify-between px-6 md:px-12 py-5">
         <button onClick={() => router.push("/")} className="flex items-center gap-2 text-brown-mid hover:text-brown-dark transition-colors">
           <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
           <span className="font-sans text-xs tracking-widest uppercase">New Analysis</span>
@@ -263,7 +263,7 @@ export default function ColorResultsPage() {
         </motion.div>
 
         {/* ── CTA: MAKEUP PAGE ── */}
-        <motion.div {...fade(0.55)}>
+        <motion.div {...fade(0.55)} className="print:hidden">
           <button
             onClick={() => router.push("/results/makeup")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
@@ -276,7 +276,16 @@ export default function ColorResultsPage() {
           </button>
         </motion.div>
 
-        <motion.p {...fade(0.6)} className="text-center font-display text-xl text-brown-dark/40 pb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
+        <motion.button
+          {...fade(0.58)}
+          onClick={() => window.print()}
+          className="print:hidden w-full flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+        >
+          <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+          Download PDF
+        </motion.button>
+
+        <motion.p {...fade(0.6)} className="print:hidden text-center font-display text-xl text-brown-dark/40 pb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
           Wear what makes you feel like yourself.
         </motion.p>
 
