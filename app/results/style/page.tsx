@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, XCircle, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, XCircle, Sparkles, X } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 
@@ -88,6 +88,7 @@ export default function StyleResultsPage() {
   const [genTotal] = useState(3);
   const [styleImages, setStyleImages] = useState<Record<string, string | null>>({});
   const [activeOccasion, setActiveOccasion] = useState<OccasionKey>("everyday");
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const generateImages = useCallback(async (imageDataUrl: string, a: ColorAnalysis) => {
     // Never throw — image generation failure must not crash the page
@@ -206,6 +207,21 @@ export default function StyleResultsPage() {
 
   return (
     <div className="min-h-screen bg-cream pb-24">
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightboxSrc} alt="" className="max-h-[90vh] max-w-full rounded-2xl object-contain shadow-2xl" />
+          <button
+            className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors"
+            onClick={() => setLightboxSrc(null)}
+          >
+            <X className="w-5 h-5 text-white" strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
       <nav className="flex items-center justify-between px-6 md:px-12 py-5">
         <button
           onClick={() => router.push("/results/hair")}
@@ -289,7 +305,11 @@ export default function StyleResultsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               {/* Generated outfit image */}
-              <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "3/4" }}>
+              <div
+                className={`relative rounded-xl overflow-hidden ${styleImages[activeOccasion] ? "cursor-pointer" : ""}`}
+                style={{ aspectRatio: "3/4" }}
+                onClick={styleImages[activeOccasion] ? () => setLightboxSrc(styleImages[activeOccasion]!) : undefined}
+              >
                 {styleImages[activeOccasion] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

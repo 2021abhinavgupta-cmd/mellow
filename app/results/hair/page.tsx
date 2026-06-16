@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Scissors, Check, Star, X } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 
@@ -20,10 +20,14 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   return <div className={`bg-white/55 border border-brown-light/25 rounded-2xl p-5 ${className}`}>{children}</div>;
 }
 
-function StyleImageCard({ name, imageData }: { name: string; imageData: string | null }) {
+function StyleImageCard({ name, imageData, onClick }: { name: string; imageData: string | null; onClick?: () => void }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative rounded-xl overflow-hidden" style={{ aspectRatio: "3/4" }}>
+      <div
+        className={`relative rounded-xl overflow-hidden ${imageData ? "cursor-pointer" : ""}`}
+        style={{ aspectRatio: "3/4" }}
+        onClick={imageData ? onClick : undefined}
+      >
         {imageData ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imageData} alt={name} className="w-full h-full object-cover" />
@@ -84,6 +88,7 @@ export default function HairResultsPage() {
   const [genDone, setGenDone] = useState(0);
   const [genTotal, setGenTotal] = useState(3);
   const [hairImages, setHairImages] = useState<Record<string, string | null>>({});
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const generateImages = useCallback(async (imageDataUrl: string, h: ColorAnalysis["hair"]) => {
     // Never throw — image generation failure must not crash the page
@@ -202,6 +207,21 @@ export default function HairResultsPage() {
 
   return (
     <div className="min-h-screen bg-cream pb-24">
+      {lightboxSrc && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
+          onClick={() => setLightboxSrc(null)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={lightboxSrc} alt="" className="max-h-[90vh] max-w-full rounded-2xl object-contain shadow-2xl" />
+          <button
+            className="absolute top-5 right-5 w-9 h-9 rounded-full bg-white/15 flex items-center justify-center hover:bg-white/25 transition-colors"
+            onClick={() => setLightboxSrc(null)}
+          >
+            <X className="w-5 h-5 text-white" strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
       <nav className="flex items-center justify-between px-6 md:px-12 py-5">
         <button
           onClick={() => router.push("/results/makeup")}
@@ -261,12 +281,13 @@ export default function HairResultsPage() {
         <motion.div {...fade(0.12)}>
           <Card>
             <SectionLabel>Most Flattering Hairstyles</SectionLabel>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(h.mostFlattering ?? []).map((style, i) => (
+            <div className="grid grid-cols-3 gap-3">
+              {(h.mostFlattering ?? []).slice(0, 3).map((style, i) => (
                 <StyleImageCard
                   key={`mf-${i}`}
                   name={style.name}
                   imageData={hairImages[`mf-${i}`] ?? null}
+                  onClick={() => { const src = hairImages[`mf-${i}`]; if (src) setLightboxSrc(src); }}
                 />
               ))}
             </div>
@@ -278,7 +299,7 @@ export default function HairResultsPage() {
           <Card>
             <SectionLabel>Why These Work For You</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(h.mostFlattering ?? []).map((style, i) => (
+              {(h.mostFlattering ?? []).slice(0, 3).map((style, i) => (
                 <div key={`desc-${i}`} className="flex items-start gap-2.5">
                   <span
                     className="font-display text-xl text-brown-light leading-none mt-0.5 flex-shrink-0"
