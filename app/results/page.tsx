@@ -276,14 +276,22 @@ export default function ColorResultsPage() {
           </button>
         </motion.div>
 
-        <motion.button
-          {...fade(0.58)}
-          onClick={() => window.print()}
-          className="print:hidden w-full flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
-        >
-          <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
-          Download PDF
-        </motion.button>
+        <motion.div {...fade(0.58)} className="print:hidden flex gap-3">
+          <button
+            onClick={() => window.print()}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+          >
+            <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+            This Page
+          </button>
+          <button
+            onClick={() => router.push("/results/print")}
+            className="flex-1 flex items-center justify-center gap-2 py-3 bg-brown-dark text-cream rounded-xl hover:bg-brown-mid transition-colors font-sans text-xs tracking-widest uppercase"
+          >
+            <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
+            All 4 Pages
+          </button>
+        </motion.div>
 
         <motion.p {...fade(0.6)} className="print:hidden text-center font-display text-xl text-brown-dark/40 pb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
           Wear what makes you feel like yourself.
