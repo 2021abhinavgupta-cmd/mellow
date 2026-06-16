@@ -114,10 +114,8 @@ export default function StyleResultsPage() {
         ? "This is a MALE person. Show him in masculine men's clothing only (shirts, trousers, suits, kurtas). No dresses, skirts, or feminine items."
         : "This is a FEMALE person. Show her in feminine women's clothing only (dresses, skirts, blouses). No men's suits or masculine items.";
 
-      const map: Record<string, string | null> = {};
-
-      for (let i = 0; i < OCCASIONS.length; i++) {
-        const key = OCCASIONS[i];
+      // Build all prompts upfront, send in one batch (parallel on server)
+      const allPrompts = OCCASIONS.map((key) => {
         const data = s[key];
         const styles = (data?.bestStyles ?? []).slice(0, 2).join(" and ");
         const label = OCCASION_LABELS[key].label.toLowerCase();
@@ -128,20 +126,26 @@ export default function StyleResultsPage() {
           `MUST keep IDENTICAL: face, skin tone, body proportions.`,
           `Full-length or 3/4 view, natural standing pose, professional fashion photography.`,
         ].join(" ");
+        return { key, prompt };
+      });
 
-        try {
-          const res = await fetch("/api/generate-visuals", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ imageDataUrl, prompts: [{ key, prompt }] }),
-          });
-          const result = await res.json();
-          map[key] = result.images?.[0]?.imageData ?? null;
-        } catch {
-          map[key] = null;
+      setGenDone(0);
+      const map: Record<string, string | null> = {};
+
+      try {
+        const res = await fetch("/api/generate-visuals", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageDataUrl, prompts: allPrompts }),
+        });
+        const result = await res.json();
+        for (const item of result.images ?? []) {
+          map[item.key] = item.imageData ?? null;
         }
-        setGenDone(i + 1);
+      } catch {
+        for (const { key } of allPrompts) map[key] = null;
       }
+      setGenDone(OCCASIONS.length);
 
       _styleCache = { photoKey, images: map };
       setStyleImages(map);

@@ -108,31 +108,29 @@ export async function POST(req: NextRequest) {
     const hasOpenAI = !!process.env.OPENAI_API_KEY;
     const hasGemini = !!process.env.GEMINI_API_KEY;
 
-    const images: { key: string; imageData: string | null }[] = [];
-
-    for (const { key, prompt } of prompts) {
-      let result: { key: string; imageData: string | null } = { key, imageData: null };
-
-      // Try OpenAI first
+    const generateOne = async (key: string, prompt: string): Promise<{ key: string; imageData: string | null }> => {
       if (hasOpenAI) {
         try {
-          result = await generateWithOpenAI(buffer, key, prompt);
+          return await generateWithOpenAI(buffer, key, prompt);
         } catch (err) {
           console.warn(`[generate-visuals] OpenAI failed for ${key}, trying Gemini:`, err instanceof Error ? err.message : err);
         }
       }
-
-      // Gemini fallback if OpenAI failed or unavailable
-      if (!result.imageData && hasGemini) {
+      if (hasGemini) {
         try {
-          result = await generateWithGemini(base64, mimeType, key, prompt);
+          return await generateWithGemini(base64, mimeType, key, prompt);
         } catch (err) {
           console.error(`[generate-visuals] Gemini also failed for ${key}:`, err instanceof Error ? err.message : err);
         }
       }
+      return { key, imageData: null };
+    };
 
-      images.push(result);
-    }
+    // Run all prompts in parallel — total time = slowest single image, not sum
+    const settled = await Promise.allSettled(prompts.map(({ key, prompt }) => generateOne(key, prompt)));
+    const images = settled.map((r, i) =>
+      r.status === "fulfilled" ? r.value : { key: prompts[i].key, imageData: null }
+    );
 
     return Response.json({ images });
   } catch (err) {
