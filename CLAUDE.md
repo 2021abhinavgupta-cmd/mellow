@@ -46,6 +46,10 @@ app/
       page.tsx            # Hair Styles page: face shape, most flattering cuts with AI images, bangs/updos, tips, hair goal
     style/
       page.tsx            # Style Guide page: body type, occasion tabs with AI outfit images, necklines, prints, outfit formula
+    face/
+      page.tsx            # PLANNED Sprint 3: face shape card, glasses/specs recs, jewellery by face shape
+    grooming/
+      page.tsx            # PLANNED Sprint 4: men only — beard styles, skincare, fragrance (replaces makeup for men)
 ```
 
 ### Full data flow
@@ -55,9 +59,9 @@ User selects photo (page.tsx)
   → FileReader.readAsDataURL
   → canvas compression: resize to max 1024px, export JPEG at 0.82 quality (~150–300KB)
   → localStorage.setItem("mellow_image", compressedDataUrl)
-  → localStorage.removeItem("mellow_analysis")   � clears any cached result from previous photo
-  → sessionStorage.removeItem("mellow_hair_images")  � clears AI-generated hair visuals
-  → sessionStorage.removeItem("mellow_style_images") � clears AI-generated outfit visuals
+  → localStorage.removeItem("mellow_analysis")   � clears any cached result from previous photo
+  → sessionStorage.removeItem("mellow_hair_images")  � clears AI-generated hair visuals
+  → sessionStorage.removeItem("mellow_style_images") � clears AI-generated outfit visuals
   → router.push("/results")
 
 /results mounts
@@ -71,16 +75,16 @@ User selects photo (page.tsx)
 /results/makeup mounts
   → reads mellow_image + mellow_analysis from localStorage (always cache hit)
   → renders makeup analysis UI
-  → "� Colour Analysis" nav back to /results
+  → "� Colour Analysis" nav back to /results
   → "Your Hair Styles →" CTA navigates to /results/hair
 
 /results/hair mounts
   → reads mellow_image + mellow_analysis from localStorage (always cache hit)
   → checks sessionStorage "mellow_hair_images" (cache hit → skip generation)
-  → on cache miss: POST /api/generate-visuals with 4 hairstyle prompts
+  → on cache miss: POST /api/generate-visuals with 3 hairstyle prompts
   → stores: sessionStorage.setItem("mellow_hair_images", JSON.stringify(map))
   → renders hair analysis UI with AI-generated style images
-  → "� Makeup" nav back to /results/makeup
+  → "� Makeup" nav back to /results/makeup
   → "Your Style Guide →" CTA navigates to /results/style
 
 /results/style mounts
@@ -89,7 +93,7 @@ User selects photo (page.tsx)
   → on cache miss: POST /api/generate-visuals with 3 outfit prompts (everyday/office/occasions)
   → stores: sessionStorage.setItem("mellow_style_images", JSON.stringify(map))
   → renders style guide UI with AI-generated outfit images per tab
-  → "� Hair Styles" nav back to /results/hair
+  → "� Hair Styles" nav back to /results/hair
 
 Route handler (app/api/analyze/route.ts)
   → GPT-4o vision (gpt-4o, response_format: json_object, max_tokens: 5000)
@@ -109,11 +113,20 @@ Route handler (app/api/generate-visuals/route.ts)
 | `mellow_image` | Compressed base64 JPEG data URL | User uploads new photo |
 | `mellow_analysis` | Stringified `ColorAnalysis` JSON | User uploads new photo |
 
+Planned additions (not yet built):
+
+| Key | Value | Sprint |
+|---|---|---|
+| `mellow_gender` | `"male"` or `"female"` | Sprint 1 |
+| `mellow_measurements` | `{ bust, waist, hips, unit }` JSON | Sprint 1 |
+| `mellow_body_type` | e.g. `"Hourglass"` — calculated client-side from measurements | Sprint 1 |
+| `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | Sprint 2 |
+
 ### sessionStorage keys
 
 | Key | Value | Cleared when |
 |---|---|---|
-| `mellow_hair_images` | `Record<string, string\|null>` — key→base64 PNG map for 4 hair style images | User uploads new photo |
+| `mellow_hair_images` | `Record<string, string\|null>` — key→base64 PNG map for 3 hair style images | User uploads new photo |
 | `mellow_style_images` | `Record<string, string\|null>` — key→base64 PNG map for 3 outfit images | User uploads new photo |
 
 sessionStorage survives client-side navigation but resets on tab close. Used for visual image cache to avoid expensive regeneration on back-navigation within a session.
@@ -132,10 +145,24 @@ Uses `gpt-image-1` `images.edit` to apply new hairstyles/outfits to the user's a
 
 - `toFile` from `"openai"` converts the base64 JPEG buffer to an Uploadable accepted by the SDK
 - Runs prompts in parallel via `Promise.allSettled` — individual failures return `{ key, imageData: null }` and are non-fatal
-- Hair page generates 4 images (one per `mostFlattering` style); style page generates 3 (one per occasion tab)
+- Hair page generates 3 images (first 3 of `mostFlattering` styles); style page generates 3 (one per occasion tab)
 - Response `b64_json` → stored as `data:image/png;base64,...` data URLs
 - Text content (descriptions, swatches, tips) always visible; images are enhancement layer only
 - Prompts instruct the model to preserve face/skin/features and change only hair/outfit
+- Falls back to Gemini (`gemini-2.5-flash-image` via v1beta) if OpenAI fails or `OPENAI_API_KEY` absent; requires `GEMINI_API_KEY` in `.env.local`
+
+## Target Audience
+
+Primary users are **Indian women**. All AI prompts and recommendations must reflect:
+- Indian skin tones (Fitzpatrick III–V; warm/olive undertones dominant)
+- 12-season framework biased toward Deep Winter, Soft/True/Deep Autumn — not Spring/Light Summer
+- Indian clothing: kurta, salwar, saree, lehenga alongside Western wear
+- Gold jewellery first (warm skin dominant); Indian types: jhumka, chandbali, Rani haar, Kundan
+- Kajal as staple makeup item; bold lip colours (red, plum, burgundy) culturally preferred
+- Warm-toned nude lips (peach/caramel), not cool pink
+- Average height 5'0"–5'4" — petite proportions affect outfit cut recommendations
+
+See `PRODUCT_PLAN.md` for full Indian market spec and complete product roadmap.
 
 ## Colour Analysis Logic
 

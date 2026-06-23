@@ -3,7 +3,10 @@
 import { useState, useCallback, useRef, DragEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Transition } from "framer-motion";
-import { Upload, Lock, Palette, Sparkles, Scissors, BookOpen } from "lucide-react";
+import { Upload, Lock, Palette, Sparkles, Scissors, BookOpen, Camera } from "lucide-react";
+import dynamic from "next/dynamic";
+
+const FaceScanner = dynamic(() => import("@/app/components/FaceScanner"), { ssr: false });
 
 const features = [
   {
@@ -36,9 +39,11 @@ const fadeUp = (delay: number) => ({
 
 export default function Home() {
   const router = useRouter();
-  const [image, setImage] = useState<string | null>(null);
-  const [gender, setGender] = useState<"male" | "female" | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const [image,       setImage]       = useState<string | null>(null);
+  const [gender,      setGender]      = useState<"male" | "female" | null>(null);
+  const [faceShape,   setFaceShape]   = useState<string | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
+  const [dragging,    setDragging]    = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const compressImage = useCallback((dataUrl: string): Promise<string> =>
@@ -63,9 +68,17 @@ export default function Home() {
       const raw = e.target?.result as string;
       const compressed = await compressImage(raw);
       setImage(compressed);
+      setFaceShape(null); // uploaded photo — no scan data
       setGender(null);
     };
     reader.readAsDataURL(file);
+  }, [compressImage]);
+
+  const handleScanCapture = useCallback(async (dataUrl: string, shape: string) => {
+    const compressed = await compressImage(dataUrl);
+    setImage(compressed);
+    setFaceShape(shape);
+    setShowScanner(false);
   }, [compressImage]);
 
   const onDrop = useCallback(
@@ -100,11 +113,22 @@ export default function Home() {
     sessionStorage.removeItem("mellow_style_images");
     localStorage.setItem("mellow_image", image);
     localStorage.setItem("mellow_gender", gender);
+    if (faceShape) {
+      localStorage.setItem("mellow_face_shape", faceShape);
+    } else {
+      localStorage.removeItem("mellow_face_shape");
+    }
     router.push("/results");
-  }, [image, gender, router]);
+  }, [image, gender, faceShape, router]);
 
   return (
     <main className="min-h-screen bg-cream">
+      {showScanner && (
+        <FaceScanner
+          onCapture={handleScanCapture}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
       {/* Nav */}
       <motion.nav
         {...fadeUp(0)}
@@ -138,7 +162,7 @@ export default function Home() {
 
         <motion.h1
           {...fadeUp(0.35)}
-          className="font-display text-[3.5rem] md:text-[5.5rem] text-brown-dark leading-[1.05] max-w-3xl"
+          className="font-display text-[2.8rem] sm:text-[3.5rem] md:text-[5.5rem] text-brown-dark leading-[1.05] max-w-3xl"
           style={{ fontStyle: "italic", fontWeight: 300 }}
         >
           Discover Your
@@ -153,49 +177,77 @@ export default function Home() {
           Upload a portrait and receive a full style analysis — colour season, makeup, hair, and wardrobe — in seconds.
         </motion.p>
 
-        {/* Upload area */}
+        {/* Upload / Scan area */}
         <motion.div {...fadeUp(0.65)} className="mt-14 w-full max-w-md">
-          {!image ? (
-            <div
-              onDrop={onDrop}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onClick={() => inputRef.current?.click()}
-              className={`relative cursor-pointer rounded-2xl border-2 border-dashed px-10 py-16 transition-all duration-300 ${
-                dragging
-                  ? "border-brown-mid bg-brown-light/10"
-                  : "border-brown-light bg-white/50 hover:bg-white/80 hover:border-brown-mid"
-              }`}
-            >
-              {/* Corner brackets */}
-              <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-light" />
-              <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-light" />
-              <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-light" />
-              <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-light" />
+          {!image && (
+            <>
+              {/* PRIMARY: face scan */}
+              <button
+                onClick={() => setShowScanner(true)}
+                className="w-full relative cursor-pointer rounded-2xl border-2 border-brown-mid bg-white/60 hover:bg-white/85 hover:border-brown-dark transition-all duration-300 px-10 py-12 flex flex-col items-center gap-5 group"
+              >
+                {/* Corner brackets */}
+                <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
 
-              <div className="flex flex-col items-center gap-5">
-                <div className="w-14 h-14 rounded-full bg-brown-light/20 flex items-center justify-center">
-                  <Upload className="w-6 h-6 text-brown-mid" strokeWidth={1.5} />
+                <div className="w-16 h-16 rounded-full bg-brown-dark flex items-center justify-center">
+                  <Camera className="w-7 h-7 text-cream" strokeWidth={1.5} />
                 </div>
-                <div>
-                  <p className="font-display text-xl text-brown-dark" style={{ fontWeight: 400 }}>
-                    Drop your portrait here
+                <div className="text-center">
+                  <p className="font-display text-2xl text-brown-dark" style={{ fontWeight: 400 }}>
+                    Scan Your Face
                   </p>
-                  <p className="font-sans text-sm text-brown-mid mt-1.5">
-                    or click to browse — JPG, PNG, WEBP
+                  <p className="font-sans text-sm text-brown-mid mt-1.5 leading-relaxed">
+                    Camera detects face shape & captures your photo automatically
                   </p>
+                </div>
+              </button>
+
+              {/* SECONDARY: upload */}
+              <div className="mt-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 border-t border-brown-light/30" />
+                  <span className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-brown-light">or upload a photo</span>
+                  <div className="flex-1 border-t border-brown-light/30" />
+                </div>
+
+                <div
+                  onDrop={onDrop}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onClick={() => inputRef.current?.click()}
+                  className={`relative cursor-pointer rounded-2xl border border-dashed px-8 py-8 transition-all duration-300 ${
+                    dragging
+                      ? "border-brown-mid bg-brown-light/10"
+                      : "border-brown-light bg-white/40 hover:bg-white/70 hover:border-brown-mid"
+                  }`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-full bg-brown-light/20 flex items-center justify-center flex-shrink-0">
+                      <Upload className="w-5 h-5 text-brown-mid" strokeWidth={1.5} />
+                    </div>
+                    <div>
+                      <p className="font-sans text-sm text-brown-dark font-medium">Drop portrait here</p>
+                      <p className="font-sans text-xs text-brown-mid mt-0.5">or click to browse — JPG, PNG, WEBP</p>
+                    </div>
+                  </div>
+
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={onChange}
+                  />
                 </div>
               </div>
+            </>
+          )}
 
-              <input
-                ref={inputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={onChange}
-              />
-            </div>
-          ) : (
+          {/* Image preview — with face shape badge if from scan */}
+          {image && (
             <div className="relative rounded-2xl overflow-hidden shadow-lg">
               {/* Corner brackets on preview */}
               <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-white/60 z-10" />
@@ -209,10 +261,20 @@ export default function Home() {
                 alt="Your portrait"
                 className="w-full h-80 object-cover"
               />
+
+              {/* Face shape badge — only shown when captured from scanner */}
+              {faceShape && (
+                <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 z-10 flex items-center gap-1.5">
+                  <Camera className="w-3 h-3 text-brown-mid" strokeWidth={1.5} />
+                  <span className="font-sans text-xs text-brown-dark">{faceShape} Face</span>
+                </div>
+              )}
+
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   setImage(null);
+                  setFaceShape(null);
                 }}
                 className="absolute top-3 right-10 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-brown-dark font-sans z-10 hover:bg-white transition-colors"
               >

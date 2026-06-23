@@ -237,9 +237,9 @@ export default function ColorResultsPage() {
             <SectionLabel>Full Seasonal Palette · {analysis.season}</SectionLabel>
             <div className="space-y-2">
               {chunk(analysis.seasonalPalette ?? [], 8).map((row, ri) => (
-                <div key={ri} className="flex gap-2 flex-wrap">
+                <div key={ri} className="flex gap-1.5 sm:gap-2 flex-wrap">
                   {row.map((hex, ci) => (
-                    <div key={`sp-${ri}-${ci}`} className="w-8 h-8 rounded-full border border-black/10" style={{ backgroundColor: hex }} />
+                    <div key={`sp-${ri}-${ci}`} className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-black/10" style={{ backgroundColor: hex }} />
                   ))}
                 </div>
               ))}

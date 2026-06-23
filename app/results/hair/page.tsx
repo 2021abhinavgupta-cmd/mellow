@@ -53,7 +53,7 @@ function StyleImageCard({ name, imageData, onClick }: { name: string; imageData:
             </div>
             <button
               onClick={handleDownload}
-              className="print:hidden absolute top-2 right-2 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+              className="print:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/60"
               title="Download image"
             >
               <Download className="w-3.5 h-3.5 text-white" strokeWidth={2} />
@@ -327,7 +327,7 @@ export default function HairResultsPage() {
         <motion.div {...fade(0.12)}>
           <Card>
             <SectionLabel>Most Flattering Hairstyles</SectionLabel>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {(h.mostFlattering ?? []).slice(0, 3).map((style, i) => (
                 <StyleImageCard
                   key={`mf-${i}`}

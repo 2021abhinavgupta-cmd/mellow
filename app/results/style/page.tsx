@@ -325,7 +325,7 @@ export default function StyleResultsPage() {
                 <button
                   key={key}
                   onClick={() => setActiveOccasion(key)}
-                  className={`flex-1 py-2 rounded-lg font-sans text-[0.65rem] tracking-widest uppercase transition-all duration-200 ${
+                  className={`flex-1 py-2.5 sm:py-2 rounded-lg font-sans text-[0.65rem] tracking-widest uppercase transition-all duration-200 ${
                     activeOccasion === key
                       ? "bg-brown-dark text-cream shadow-sm"
                       : "text-brown-mid hover:text-brown-dark"
@@ -340,7 +340,7 @@ export default function StyleResultsPage() {
               {/* Generated outfit image */}
               <div
                 className={`relative rounded-xl overflow-hidden group ${styleImages[activeOccasion] ? "cursor-pointer" : ""}`}
-                style={{ aspectRatio: "3/4" }}
+                style={{ aspectRatio: "3/4", maxHeight: "280px" }}
                 onClick={styleImages[activeOccasion] ? () => setLightboxSrc(styleImages[activeOccasion]!) : undefined}
               >
                 {styleImages[activeOccasion] ? (
@@ -370,7 +370,7 @@ export default function StyleResultsPage() {
                         a.download = `mellow-${activeOccasion}-outfit.png`;
                         a.click();
                       }}
-                      className="print:hidden absolute top-2 right-2 w-8 h-8 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black/60"
+                      className="print:hidden absolute top-2 right-2 w-9 h-9 rounded-full bg-black/40 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity hover:bg-black/60"
                       title="Download image"
                     >
                       <Download className="w-4 h-4 text-white" strokeWidth={2} />
