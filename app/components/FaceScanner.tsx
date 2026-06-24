@@ -7,40 +7,42 @@ import { motion, AnimatePresence } from "framer-motion";
 const WASM_URL  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-// ── Landmark sets ──────────────────────────────────────────────────────────
+// ── Landmark groups ────────────────────────────────────────────────────────
 const SILHOUETTE = [
   10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288,
   397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136,
   172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
 ];
 const MEASURE_PAIRS: [number, number, string][] = [
-  [54,  284, "#C9A882"], [33,  263, "#C9A882"],
+  [54, 284, "#C9A882"], [33, 263, "#C9A882"],
   [234, 454, "#8B6347"], [172, 397, "#4A3728"],
 ];
-// Simplified wireframe features for Face ID look
-const WIRE_EYE_R   = [33, 160, 158, 133, 153, 144, 33];
-const WIRE_EYE_L   = [362, 385, 387, 263, 380, 373, 362];
-const WIRE_BROW_R  = [46, 52, 55, 107];
-const WIRE_BROW_L  = [276, 282, 285, 336];
-const WIRE_NOSE    = [168, 6, 197, 5, 4, 1];
-const WIRE_LIPS    = [61, 37, 0, 267, 291, 321, 17, 84, 61];
+const WIRE_EYE_R  = [33, 160, 158, 133, 153, 144, 33];
+const WIRE_EYE_L  = [362, 385, 387, 263, 380, 373, 362];
+const WIRE_BROW_R = [46, 52, 55, 107];
+const WIRE_BROW_L = [276, 282, 285, 336];
+const WIRE_NOSE   = [168, 6, 197, 5, 4, 1];
+const WIRE_LIPS   = [61, 37, 0, 267, 291, 321, 17, 84, 61];
 
-// ── Measurement types ──────────────────────────────────────────────────────
-interface M  { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number }
+// ── Measurement ────────────────────────────────────────────────────────────
+interface M { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number }
 interface Lm { x: number; y: number; z: number }
 
-function d2(a: { x: number; y: number }, b: { x: number; y: number }) {
-  return Math.sqrt((a.x - b.x) ** 2 + (a.y - b.y) ** 2);
+function d2px(a: Lm, b: Lm, W: number, H: number) {
+  // CRITICAL: convert to pixel space before measuring to avoid 4:3 aspect distortion
+  return Math.sqrt(((a.x - b.x) * W) ** 2 + ((a.y - b.y) * H) ** 2);
 }
-function measure(lm: Lm[]): M {
+
+function measure(lm: Lm[], W: number, H: number): M {
   return {
-    foreW:   d2(lm[54],  lm[284]),
-    eyeW:    d2(lm[33],  lm[263]),
-    cheekW:  d2(lm[234], lm[454]),
-    jawW:    d2(lm[172], lm[397]),
-    faceLen: d2(lm[10],  lm[152]),
+    foreW:   d2px(lm[54],  lm[284], W, H),
+    eyeW:    d2px(lm[33],  lm[263], W, H),
+    cheekW:  d2px(lm[234], lm[454], W, H),
+    jawW:    d2px(lm[172], lm[397], W, H),
+    faceLen: d2px(lm[10],  lm[152], W, H),
   };
 }
+
 function avgBuffer(buf: M[]): M {
   const n = buf.length;
   return {
@@ -51,34 +53,52 @@ function avgBuffer(buf: M[]): M {
     faceLen: buf.reduce((s, m) => s + m.faceLen, 0) / n,
   };
 }
+
 function classifyFromAvg(avg: M): string {
   const { foreW, eyeW, cheekW, jawW, faceLen } = avg;
-  const lenR = faceLen / cheekW, jawR = jawW / cheekW;
-  const foreR = foreW / cheekW, eyeR = eyeW / cheekW;
+  const lenR  = faceLen / cheekW;
+  const jawR  = jawW    / cheekW;
+  const foreR = foreW   / cheekW;
+  const eyeR  = eyeW    / cheekW;
+
   const scores: Record<string, number> = {
     Long: 0, Diamond: 0, Triangle: 0, Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
-  scores.Long     += lenR > 1.60 ? 4 : lenR > 1.50 ? 2 : 0;
-  scores.Diamond  += foreR < 0.82 ? 2 : 0; scores.Diamond += jawR < 0.78 ? 2 : 0;
-  scores.Diamond  += eyeR > 0.84 ? 1 : 0; scores.Diamond += cheekW > foreW && cheekW > jawW ? 1 : 0;
+
+  // Pixel-corrected thresholds (typical selfie on 640×480 front cam)
+  // Oval face ≈ 1.28–1.50, Round ≈ 0.95–1.20, Long > 1.55
+  scores.Long     += lenR > 1.55 ? 4 : lenR > 1.46 ? 2 : 0;
+  scores.Diamond  += foreR < 0.82 ? 2 : 0;
+  scores.Diamond  += jawR  < 0.78 ? 2 : 0;
+  scores.Diamond  += eyeR  > 0.84 ? 1 : 0;
+  scores.Diamond  += cheekW > foreW && cheekW > jawW ? 1 : 0;
   scores.Triangle += (jawR - foreR) > 0.15 ? 4 : (jawR - foreR) > 0.10 ? 2 : 0;
   scores.Heart    += (foreR - jawR) > 0.18 ? 4 : (foreR - jawR) > 0.12 ? 2 : 0;
   scores.Heart    += foreR > 0.88 ? 1 : 0;
-  scores.Round    += lenR < 1.18 ? 3 : lenR < 1.25 ? 1 : 0;
-  scores.Round    += jawR > 0.84 ? 2 : jawR > 0.78 ? 1 : 0; scores.Round += foreR > 0.84 ? 1 : 0;
-  scores.Square   += lenR >= 1.18 && lenR < 1.38 ? 2 : 0;
+  scores.Round    += lenR < 1.12 ? 3 : lenR < 1.20 ? 1 : 0;
+  scores.Round    += jawR > 0.84 ? 2 : jawR > 0.78 ? 1 : 0;
+  scores.Round    += foreR > 0.84 ? 1 : 0;
+  scores.Square   += lenR >= 1.10 && lenR < 1.35 ? 2 : 0;
   scores.Square   += jawR > 0.82 ? 3 : jawR > 0.76 ? 1 : 0;
   scores.Square   += Math.abs(foreR - jawR) < 0.08 ? 2 : 0;
-  scores.Oval     += lenR >= 1.25 && lenR <= 1.55 ? 3 : 0;
+  scores.Oval     += lenR >= 1.22 && lenR <= 1.55 ? 3 : 0;
   scores.Oval     += jawR >= 0.70 && jawR <= 0.84 ? 2 : 0;
   scores.Oval     += foreR >= 0.78 && foreR <= 0.92 ? 2 : 0;
   scores.Oval     += Math.abs(foreR - jawR) < 0.12 ? 1 : 0;
-  if (lenR > 1.50) scores.Oval = Math.max(0, scores.Oval - 3);
+  if (lenR > 1.46) scores.Oval = Math.max(0, scores.Oval - 3);
+
   return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
 }
 
-// yaw: pos = user turns to their left (mirror view), neg = right; pitch: pos = down, neg = up
-function estimatePose(lm: Lm[]): { yaw: number; pitch: number } {
+// ── Pose from 3D transformation matrix (column-major 4×4) ─────────────────
+// Right-vector Z component (m[2]): pos = user turned left (display), neg = right
+// Up-vector    Z component (m[6]): neg = looking up, pos = looking down
+function poseFromMatrix(data: Float32Array): { yaw: number; pitch: number } {
+  return { yaw: data[2], pitch: data[6] };
+}
+
+// Fallback from 2D landmarks when matrix unavailable
+function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
   const faceW = lm[454].x - lm[234].x;
   const yaw   = faceW > 0 ? ((lm[1].x - lm[234].x) / faceW - 0.5) * 2 : 0;
   const faceH = lm[152].y - lm[10].y;
@@ -86,93 +106,62 @@ function estimatePose(lm: Lm[]): { yaw: number; pitch: number } {
   return { yaw, pitch };
 }
 
-// ── Ring / coverage ────────────────────────────────────────────────────────
-const N_SEGS         = 8;    // ring segments
-const FRAMES_PER_SEG = 12;   // frames to fill one segment
-const INIT_FRAMES    = 20;   // frontal frames before circular guidance
-const MIN_COVERED    = 5;    // segments needed to complete
+// ── Coverage ring ──────────────────────────────────────────────────────────
+const N_SEGS         = 8;
+const FRAMES_PER_SEG = 12;
+const INIT_FRAMES    = 20;
+const MIN_COVERED    = 5;
+const TICK_COUNT     = 36; // Face ID-style tick marks
 
-// Map (yaw,pitch) → ring segment 0–7.
-// Segment 0 = top = frontal, going CW: 2=right, 4=bottom, 6=left
+// Map (yaw,pitch) → ring segment 0–7
+// 0=top/frontal, 2=right, 4=bottom, 6=left  (clockwise from top)
 function getSegment(yaw: number, pitch: number): number {
   if (Math.sqrt(yaw * yaw + pitch * pitch) < 0.08) return 0;
-  let angle = Math.atan2(yaw, -pitch); // right=π/2, down=π, left=-π/2, up=0
+  let angle = Math.atan2(yaw, -pitch);
   if (angle < 0) angle += 2 * Math.PI;
   return Math.floor((angle / (2 * Math.PI)) * N_SEGS) % N_SEGS;
 }
 
-// SVG arc path for ring segment i
-const CX = 68, CY = 88, RING_R = 76;
-function segArc(i: number): string {
-  const gap   = 8; // degrees gap between segments
-  const span  = 360 / N_SEGS - gap;
-  const base  = 270 + i * (360 / N_SEGS) + gap / 2;
-  const start = (base * Math.PI) / 180;
-  const end   = ((base + span) * Math.PI) / 180;
-  const x1 = CX + RING_R * Math.cos(start), y1 = CY + RING_R * Math.sin(start);
-  const x2 = CX + RING_R * Math.cos(end),   y2 = CY + RING_R * Math.sin(end);
-  return `M ${x1.toFixed(1)} ${y1.toFixed(1)} A ${RING_R} ${RING_R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)}`;
-}
-
-// Current-position dot on ring
-function dotOnRing(yaw: number, pitch: number): { x: number; y: number } {
-  let angle = Math.atan2(yaw, -pitch) - Math.PI / 2; // top = -90°
-  return {
-    x: CX + RING_R * Math.cos(angle),
-    y: CY + RING_R * Math.sin(angle),
-  };
-}
-
-function coverageHint(covered: boolean[], phase: "init" | "scan"): string {
-  if (phase === "init") return "Hold still — scanning front";
+function coverageHint(covered: boolean[], faceInView: boolean, tooClose: boolean): string {
+  if (!faceInView) return "Move closer to the camera";
+  if (tooClose)    return "Move back — you're too close";
   const L = covered[5] || covered[6] || covered[7];
   const R = covered[1] || covered[2] || covered[3];
   const D = covered[3] || covered[4] || covered[5];
-  if (!L && !R) return "Slowly turn your head left, then right";
-  if (!L) return "Turn your head left more";
-  if (!R) return "Turn your head right more";
-  if (!D) return "Tilt your chin down slightly";
+  if (!L && !R)    return "Slowly turn your head left, then right";
+  if (!L)          return "Turn your head left more";
+  if (!R)          return "Turn your head right more";
+  if (!D)          return "Tilt your chin down slightly";
   return "Keep moving — almost done";
 }
 
-// ── Canvas drawing ─────────────────────────────────────────────────────────
-function drawWire(
-  ctx: CanvasRenderingContext2D,
-  lm: Lm[],
-  W: number, H: number,
-) {
+// ── Canvas draw ────────────────────────────────────────────────────────────
+function drawFace(ctx: CanvasRenderingContext2D, lm: Lm[], W: number, H: number) {
   const p = (i: number) => ({ x: lm[i].x * W, y: lm[i].y * H });
 
-  // Silhouette
   ctx.beginPath();
   SILHOUETTE.forEach((idx, i) => {
     const { x, y } = p(idx);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
   ctx.closePath();
-  ctx.strokeStyle = "rgba(201,168,130,0.80)";
+  ctx.strokeStyle = "rgba(201,168,130,0.85)";
   ctx.lineWidth = 1.5; ctx.stroke();
 
-  // Wireframe features (low opacity — ghostly face mesh)
-  const wireColor = "rgba(201,168,130,0.30)";
-  [[WIRE_EYE_R], [WIRE_EYE_L], [WIRE_BROW_R], [WIRE_BROW_L], [WIRE_NOSE], [WIRE_LIPS]].forEach(([pts]) => {
+  const wire = "rgba(201,168,130,0.28)";
+  [WIRE_EYE_R, WIRE_EYE_L, WIRE_BROW_R, WIRE_BROW_L, WIRE_NOSE, WIRE_LIPS].forEach((pts) => {
     ctx.beginPath();
-    pts.forEach((idx, i) => {
-      const { x, y } = p(idx);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.strokeStyle = wireColor;
-    ctx.lineWidth = 1.2; ctx.stroke();
+    pts.forEach((idx, i) => { const { x, y } = p(idx); i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); });
+    ctx.strokeStyle = wire; ctx.lineWidth = 1.1; ctx.stroke();
   });
 
-  // Measurement dots
   MEASURE_PAIRS.forEach(([a, b, color]) => {
     const ax = lm[a].x * W, ay = lm[a].y * H;
     const bx = lm[b].x * W, by = lm[b].y * H;
     ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
-    ctx.strokeStyle = color + "55"; ctx.lineWidth = 0.7; ctx.stroke();
+    ctx.strokeStyle = color + "44"; ctx.lineWidth = 0.7; ctx.stroke();
     [{ x: ax, y: ay }, { x: bx, y: by }].forEach(({ x, y }) => {
-      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+      ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2);
       ctx.fillStyle = color; ctx.fill();
     });
   });
@@ -185,19 +174,19 @@ interface Props {
 }
 
 export default function FaceScanner({ onCapture, onClose }: Props) {
-  const videoRef       = useRef<HTMLVideoElement>(null);
-  const canvasRef      = useRef<HTMLCanvasElement>(null);
+  const videoRef    = useRef<HTMLVideoElement>(null);
+  const canvasRef   = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const landmarker     = useRef<any>(null);
-  const stream         = useRef<MediaStream | null>(null);
-  const raf            = useRef<number>(0);
-  const captured       = useRef(false);
-  const measureBuf     = useRef<M[]>([]);
-  const frontalImg     = useRef<string | null>(null); // best frontal frame
-  const initAcc        = useRef(0);
-  const segFrames      = useRef<number[]>(Array(N_SEGS).fill(0));
-  const lastYaw        = useRef(0);
-  const lastPitch      = useRef(0);
+  const landmarker  = useRef<any>(null);
+  const stream      = useRef<MediaStream | null>(null);
+  const raf         = useRef<number>(0);
+  const captured    = useRef(false);
+  const measureBuf  = useRef<M[]>([]);
+  const frontalImg  = useRef<string | null>(null);
+  const initAcc     = useRef(0);
+  const segFrames   = useRef<number[]>(Array(N_SEGS).fill(0));
+  const yawRef      = useRef(0);
+  const pitchRef    = useRef(0);
 
   const [status,       setStatus]       = useState<"loading" | "scanning" | "done" | "error">("loading");
   const [phase,        setPhase]        = useState<"init" | "scan">("init");
@@ -205,34 +194,26 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
   const [coveredCount, setCoveredCount] = useState(0);
   const [faceShape,    setFaceShape]    = useState<string | null>(null);
   const [faceInView,   setFaceInView]   = useState(false);
-  const [dot,          setDot]          = useState<{ x: number; y: number } | null>(null);
+  const [tooClose,     setTooClose]     = useState(false);
   const [initPct,      setInitPct]      = useState(0);
+  const [dotAngle,     setDotAngle]     = useState<number | null>(null);
 
-  const doCapture = useCallback(
-    (shape: string) => {
-      if (captured.current) return;
-      captured.current = true;
-      cancelAnimationFrame(raf.current);
-      stream.current?.getTracks().forEach((t) => t.stop());
-
-      // Prefer the saved frontal image for best skin analysis
-      const useImage = frontalImg.current;
-      if (useImage) {
-        setStatus("done");
-        setTimeout(() => onCapture(useImage, shape), 800);
-        return;
-      }
-      const video = videoRef.current;
-      if (!video) return;
-      const cap = document.createElement("canvas");
-      cap.width = video.videoWidth; cap.height = video.videoHeight;
-      const ctx = cap.getContext("2d")!;
-      ctx.translate(cap.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0);
-      setStatus("done");
-      setTimeout(() => onCapture(cap.toDataURL("image/jpeg", 0.85), shape), 800);
-    },
-    [onCapture]
-  );
+  const doCapture = useCallback((shape: string) => {
+    if (captured.current) return;
+    captured.current = true;
+    cancelAnimationFrame(raf.current);
+    stream.current?.getTracks().forEach((t) => t.stop());
+    const img = frontalImg.current;
+    if (img) { setStatus("done"); setTimeout(() => onCapture(img, shape), 800); return; }
+    const video = videoRef.current;
+    if (!video) return;
+    const cap = document.createElement("canvas");
+    cap.width = video.videoWidth; cap.height = video.videoHeight;
+    const ctx = cap.getContext("2d")!;
+    ctx.translate(cap.width, 0); ctx.scale(-1, 1); ctx.drawImage(video, 0, 0);
+    setStatus("done");
+    setTimeout(() => onCapture(cap.toDataURL("image/jpeg", 0.88), shape), 800);
+  }, [onCapture]);
 
   const detect = useCallback(() => {
     const video  = videoRef.current;
@@ -254,70 +235,78 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
     if (results.faceLandmarks.length > 0) {
       const lm = results.faceLandmarks[0];
       setFaceInView(true);
-      drawWire(ctx, lm, W, H);
+      drawFace(ctx, lm, W, H);
 
-      measureBuf.current.push(measure(lm));
-      if (measureBuf.current.length > 180) measureBuf.current.shift();
+      // Face size check — cheekW > 52% of frame width = too close
+      const cheekWnorm = Math.abs(lm[454].x - lm[234].x);
+      const close = cheekWnorm > 0.52;
+      setTooClose(close);
 
-      const { yaw, pitch } = estimatePose(lm);
-      lastYaw.current   = yaw;
-      lastPitch.current = pitch;
-      setDot(dotOnRing(yaw, pitch));
+      // Accumulate pixel-space measurements
+      measureBuf.current.push(measure(lm, W, H));
+      if (measureBuf.current.length > 200) measureBuf.current.shift();
+
+      // Pose: prefer transformation matrix (true 3D), fall back to landmarks
+      let pose: { yaw: number; pitch: number };
+      if (results.facialTransformationMatrixes?.length > 0) {
+        pose = poseFromMatrix(results.facialTransformationMatrixes[0].data);
+      } else {
+        pose = poseFromLandmarks(lm);
+      }
+      const { yaw, pitch } = pose;
+      yawRef.current   = yaw;
+      pitchRef.current = pitch;
+
+      // Compute dot angle for ring visualization
+      setDotAngle(Math.atan2(yaw, -pitch) - Math.PI / 2);
 
       const isFrontal = Math.abs(yaw) < 0.10 && Math.abs(pitch) < 0.12;
 
-      // Save best frontal frame (non-mirrored, highest quality)
-      if (isFrontal && !frontalImg.current) {
+      // Save best frontal frame for GPT-4o (90% quality, non-mirrored)
+      if (isFrontal && !frontalImg.current && !close) {
         const cap = document.createElement("canvas");
         cap.width = W; cap.height = H;
         const c = cap.getContext("2d")!;
         c.translate(W, 0); c.scale(-1, 1); c.drawImage(video, 0, 0);
-        frontalImg.current = cap.toDataURL("image/jpeg", 0.90);
+        frontalImg.current = cap.toDataURL("image/jpeg", 0.92);
       }
 
-      if (measureBuf.current.length >= 20) {
-        const shape = classifyFromAvg(avgBuffer(measureBuf.current));
-        setFaceShape(shape);
+      if (measureBuf.current.length >= 25) {
+        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current)));
       }
 
-      // ── Phase: init (frontal hold) ──
+      // Phase 1: frontal hold
       if (initAcc.current < INIT_FRAMES) {
-        if (isFrontal) {
-          initAcc.current += 1;
-          setInitPct(initAcc.current / INIT_FRAMES);
-        } else {
-          initAcc.current = Math.max(0, initAcc.current - 0.5);
-          setInitPct(initAcc.current / INIT_FRAMES);
-        }
-        if (initAcc.current >= INIT_FRAMES) {
-          setPhase("scan");
-        }
+        initAcc.current = isFrontal && !close
+          ? Math.min(initAcc.current + 1, INIT_FRAMES)
+          : Math.max(0, initAcc.current - 0.5);
+        setInitPct(initAcc.current / INIT_FRAMES);
+        if (initAcc.current >= INIT_FRAMES) setPhase("scan");
       } else {
-        // ── Phase: circular scan ──
-        const seg = getSegment(yaw, pitch);
-        const prev = segFrames.current[seg];
-        const next = Math.min(prev + 1, FRAMES_PER_SEG);
-        if (next !== prev) {
-          segFrames.current[seg] = next;
-          if (next >= FRAMES_PER_SEG) {
+        // Phase 2: circular coverage
+        if (!close) {
+          const seg = getSegment(yaw, pitch);
+          segFrames.current[seg] = Math.min(segFrames.current[seg] + 1, FRAMES_PER_SEG);
+          if (segFrames.current[seg] >= FRAMES_PER_SEG) {
             setCovered(prev => {
-              const n = [...prev];
-              n[seg] = true;
-              const count = n.filter(Boolean).length;
+              if (prev[seg]) return prev;
+              const next = [...prev]; next[seg] = true;
+              const count = next.filter(Boolean).length;
               setCoveredCount(count);
-              if (count >= MIN_COVERED && measureBuf.current.length >= 20) {
-                const finalShape = classifyFromAvg(avgBuffer(measureBuf.current));
-                setFaceShape(finalShape);
-                doCapture(finalShape);
+              if (count >= MIN_COVERED && measureBuf.current.length >= 30) {
+                const shape = classifyFromAvg(avgBuffer(measureBuf.current));
+                setFaceShape(shape);
+                doCapture(shape);
               }
-              return n;
+              return next;
             });
           }
         }
       }
     } else {
       setFaceInView(false);
-      setDot(null);
+      setTooClose(false);
+      setDotAngle(null);
       initAcc.current = Math.max(0, initAcc.current - 1);
     }
 
@@ -334,8 +323,10 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
         if (cancelled) return;
         const lmkr = await FaceLandmarker.createFromOptions(resolver, {
           baseOptions: { modelAssetPath: MODEL_URL, delegate: "GPU" },
-          runningMode: "VIDEO", numFaces: 1,
-          outputFaceBlendshapes: false, outputFacialTransformationMatrixes: false,
+          runningMode: "VIDEO",
+          numFaces: 1,
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: true, // true 3D pose angles
         });
         if (cancelled) { lmkr.close(); return; }
         landmarker.current = lmkr;
@@ -366,7 +357,10 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
     return () => cancelAnimationFrame(raf.current);
   }, [status, detect]);
 
-  const totalPct = coveredCount / N_SEGS;
+  // Face ID ring: 36 ticks in 4:3 viewBox, centered on face
+  // viewBox "0 0 4 3" maps to camera aspect ratio exactly
+  const RCX = 2.0, RCY = 1.22;
+  const R_INNER = 0.76, R_OUTER_NORM = 0.85, R_OUTER_CARD = 0.94, R_DOT = 0.805;
 
   return (
     <div className="fixed inset-0 z-50 bg-brown-dark/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 sm:p-4">
@@ -398,50 +392,85 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
           <canvas ref={canvasRef}
             className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: "scaleX(-1)" }} />
 
-          {/* Face ID ring overlay */}
-          {status === "scanning" && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <svg width={CX * 2} height={CY * 2} viewBox={`0 0 ${CX * 2} ${CY * 2}`}
-                style={{ overflow: "visible" }}>
-                {/* 8 ring segments */}
-                {Array.from({ length: N_SEGS }, (_, i) => (
-                  <path
-                    key={i}
-                    d={segArc(i)}
-                    fill="none"
-                    stroke={covered[i] ? "#C9A882" : "rgba(255,255,255,0.18)"}
-                    strokeWidth={covered[i] ? 3.5 : 2}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke 0.4s ease, stroke-width 0.3s ease" }}
-                  />
-                ))}
-                {/* Trailing dot showing current head position */}
-                {dot && faceInView && (
-                  <motion.circle
-                    cx={dot.x} cy={dot.y} r={5}
-                    fill="#C9A882"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    style={{ filter: "drop-shadow(0 0 4px #C9A882)" }}
-                  />
-                )}
-              </svg>
-            </div>
-          )}
+          {/* Dark vignette for Face ID feel */}
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ background: "radial-gradient(ellipse 55% 70% at 50% 42%, transparent 40%, rgba(0,0,0,0.55) 100%)" }} />
 
-          {/* Init phase arc progress inside camera */}
-          {status === "scanning" && phase === "init" && faceInView && (
-            <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-              <div className="bg-black/50 rounded-full px-3 py-1">
-                <div className="w-24 bg-white/20 rounded-full h-0.5 overflow-hidden">
-                  <motion.div
-                    className="bg-[#C9A882] h-0.5 rounded-full"
-                    animate={{ width: `${initPct * 100}%` }}
-                    transition={{ duration: 0.1 }}
+          {/* Face ID tick ring — SVG in 4:3 viewBox */}
+          {status === "scanning" && (
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 4 3"
+              preserveAspectRatio="xMidYMid meet"
+            >
+              {/* Dashed oval guide (face positioning) */}
+              <ellipse cx={RCX} cy={RCY} rx={0.50} ry={0.65}
+                fill="none"
+                stroke={tooClose ? "rgba(255,140,0,0.4)" : "rgba(255,255,255,0.12)"}
+                strokeWidth="0.015"
+                strokeDasharray="0.06 0.03"
+              />
+
+              {/* 36 Face ID tick marks */}
+              {Array.from({ length: TICK_COUNT }, (_, i) => {
+                const angle     = (i / TICK_COUNT) * 2 * Math.PI - Math.PI / 2;
+                const isCard    = i % 9 === 0;
+                const r2        = isCard ? R_OUTER_CARD : R_OUTER_NORM;
+                const seg       = Math.floor(i / (TICK_COUNT / N_SEGS));
+                const x1 = RCX + R_INNER  * Math.cos(angle);
+                const y1 = RCY + R_INNER  * Math.sin(angle);
+                const x2 = RCX + r2       * Math.cos(angle);
+                const y2 = RCY + r2       * Math.sin(angle);
+                return (
+                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
+                    stroke={covered[seg] ? "#C9A882" : "rgba(255,255,255,0.22)"}
+                    strokeWidth={isCard ? "0.040" : "0.022"}
+                    strokeLinecap="round"
+                    style={{ transition: "stroke 0.5s ease" }}
                   />
-                </div>
-              </div>
-            </div>
+                );
+              })}
+
+              {/* Segment marker dots at ring */}
+              {Array.from({ length: N_SEGS }, (_, i) => {
+                const angle = (i / N_SEGS) * 2 * Math.PI - Math.PI / 2;
+                const mx = RCX + (R_OUTER_CARD + 0.04) * Math.cos(angle);
+                const my = RCY + (R_OUTER_CARD + 0.04) * Math.sin(angle);
+                return <circle key={i} cx={mx} cy={my} r={0.025}
+                  fill={i < coveredCount ? "#8B6347" : "rgba(255,255,255,0.15)"}
+                  style={{ transition: "fill 0.4s ease" }} />;
+              })}
+
+              {/* Current head-position dot on ring */}
+              {dotAngle !== null && faceInView && (
+                <motion.circle
+                  cx={RCX + R_DOT * Math.cos(dotAngle)}
+                  cy={RCY + R_DOT * Math.sin(dotAngle)}
+                  r={0.055}
+                  fill="#C9A882"
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  style={{ filter: "drop-shadow(0 0 0.04px #C9A882)" }}
+                />
+              )}
+
+              {/* Init phase fill arc */}
+              {phase === "init" && faceInView && initPct > 0 && (
+                <circle
+                  cx={RCX} cy={RCY}
+                  r={R_OUTER_CARD + 0.02}
+                  fill="none"
+                  stroke="#C9A882"
+                  strokeWidth="0.025"
+                  strokeLinecap="round"
+                  pathLength={100}
+                  strokeDasharray={100}
+                  strokeDashoffset={100 - initPct * 100}
+                  transform={`rotate(-90 ${RCX} ${RCY})`}
+                  style={{ transition: "stroke-dashoffset 0.1s ease" }}
+                />
+              )}
+            </svg>
           )}
 
           {/* Loading */}
@@ -474,33 +503,35 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
           )}
         </div>
 
-        {/* Instruction panel */}
+        {/* Controls */}
         {status === "scanning" && (
           <div className="px-5 py-4 space-y-3">
-            {/* Segment dots row */}
+            {/* 8 segment indicator dots */}
             <div className="flex items-center justify-center gap-1.5">
               {Array.from({ length: N_SEGS }, (_, i) => (
-                <motion.div
-                  key={i}
-                  animate={{ backgroundColor: covered[i] ? "#4A3728" : "#C9A882", opacity: covered[i] ? 1 : 0.35 }}
-                  transition={{ duration: 0.4 }}
-                  className="w-2 h-2 rounded-full"
+                <motion.div key={i}
+                  animate={{
+                    width: i === getSegment(yawRef.current, pitchRef.current) && phase === "scan" ? 20 : 8,
+                    backgroundColor: covered[i] ? "#4A3728" : "#C9A882",
+                    opacity: covered[i] ? 1 : 0.35,
+                  }}
+                  transition={{ duration: 0.3 }}
+                  className="h-2 rounded-full"
                 />
               ))}
             </div>
 
-            {/* Instruction text */}
+            {/* Instruction */}
             <AnimatePresence mode="wait">
-              <motion.div
-                key={`${phase}-${faceInView}`}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                transition={{ duration: 0.2 }}
+              <motion.div key={`${phase}-${faceInView}-${tooClose}`}
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}
                 className="text-center"
               >
                 <p className="font-display text-xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-                  {!faceInView
+                  {tooClose
+                    ? "Move back a little"
+                    : !faceInView
                     ? "Position your face"
                     : phase === "init"
                     ? "Look straight ahead"
@@ -508,31 +539,24 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
                   }
                 </p>
                 <p className="font-sans text-xs text-brown-mid mt-1">
-                  {!faceInView
-                    ? "Move closer to the camera"
-                    : phase === "scan"
-                    ? coverageHint(covered, phase)
-                    : "Hold still while we scan"
-                  }
+                  {coverageHint(covered, faceInView, tooClose)}
                 </p>
               </motion.div>
             </AnimatePresence>
 
-            {/* Overall ring fill bar */}
+            {/* Overall progress bar */}
             <div className="w-full bg-brown-light/20 rounded-full h-0.5 overflow-hidden">
               <motion.div
                 className="bg-brown-dark h-0.5 rounded-full"
-                animate={{ width: `${totalPct * 100}%` }}
+                animate={{ width: `${(coveredCount / N_SEGS) * 100}%` }}
                 transition={{ duration: 0.2 }}
               />
             </div>
 
-            {/* Manual capture once enough scanned */}
+            {/* Manual capture */}
             {coveredCount >= MIN_COVERED && faceShape && (
-              <button
-                onClick={() => doCapture(faceShape)}
-                className="w-full border border-brown-light text-brown-dark py-2 rounded-xl font-sans text-xs tracking-[0.2em] uppercase hover:bg-brown-light/20 transition-colors"
-              >
+              <button onClick={() => doCapture(faceShape)}
+                className="w-full border border-brown-light text-brown-dark py-2 rounded-xl font-sans text-xs tracking-[0.2em] uppercase hover:bg-brown-light/20 transition-colors">
                 Done · {faceShape} Face
               </button>
             )}
