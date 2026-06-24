@@ -43,7 +43,25 @@ async function analyzeWithGemini(imageDataUrl: string, systemPrompt: string): Pr
   return raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
-function buildSystemPrompt(gender: "male" | "female") {
+interface SkinTonePayload {
+  ita: number; fitzpatrick: number; monk: number;
+  hex: string; L: number; a: number; b: number; label: string;
+}
+
+function skinToneBlock(st: SkinTonePayload): string {
+  const fRoman = ["", "I", "II", "III", "IV", "V", "VI"][st.fitzpatrick] ?? st.fitzpatrick;
+  return `
+MEASURED SKIN TONE — pixel-sampled from client camera (trust this over visual estimation):
+  Fitzpatrick: ${fRoman} — ${st.label.split("(")[0].trim()}
+  Monk Scale:  ${st.monk}/10
+  ITA:         ${st.ita}° (higher = fairer; Indian range typically -10° to +28°)
+  CIELAB:      L*=${st.L}  a*=${st.a}  b*=${st.b}
+  Dominant hex: ${st.hex}
+Use these values to set the exact colour season, undertone, and season palette — do NOT override them with a guess.
+`;
+}
+
+function buildSystemPrompt(gender: "male" | "female", skinTone?: SkinTonePayload) {
   const isMale = gender === "male";
   const hairExamples = isMale
     ? "Textured Crop, Side Part, Pompadour, Fade, Crew Cut, Quiff, Slick Back, French Crop, Undercut, Buzz Cut"
@@ -54,6 +72,7 @@ function buildSystemPrompt(gender: "male" | "female") {
 
   return `You are a professional personal colour, makeup, and style analyst specialising in seasonal colour theory.
 The person in this photo is ${isMale ? "MALE" : "FEMALE"}. Use this gender for ALL recommendations — never suggest styles for the opposite gender.
+${skinTone ? skinToneBlock(skinTone) : ""}
 
 HAIR — recommend only ${isMale ? "men's" : "women's"} hairstyles. Examples: ${hairExamples}.
 ${isMale ? "Do NOT suggest: buns, half-up half-down, updos meant for women, long feminine styles." : "Do NOT suggest: fades, undercuts, crew cuts, or men's cuts."}
@@ -199,14 +218,16 @@ const BASE_SCHEMA = `
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageDataUrl, gender } = (await req.json()) as { imageDataUrl: string; gender?: string };
+    const { imageDataUrl, gender, skinTone } = (await req.json()) as {
+      imageDataUrl: string; gender?: string; skinTone?: SkinTonePayload;
+    };
 
     if (!imageDataUrl?.startsWith("data:image/")) {
       return Response.json({ error: "Invalid image data" }, { status: 400 });
     }
 
     const safeGender: "male" | "female" = gender === "male" ? "male" : "female";
-    const systemPrompt = buildSystemPrompt(safeGender) + BASE_SCHEMA;
+    const systemPrompt = buildSystemPrompt(safeGender, skinTone) + BASE_SCHEMA;
 
     // Try OpenAI first
     if (process.env.OPENAI_API_KEY) {

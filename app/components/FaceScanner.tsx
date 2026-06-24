@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { sampleSkinToneFromVideo, computeSkinToneFromLab } from "@/app/lib/skinTone";
 
 const WASM_URL  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -183,6 +184,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
   const captured    = useRef(false);
   const measureBuf  = useRef<M[]>([]);
   const frontalImg  = useRef<string | null>(null);
+  const skinLabBuf  = useRef<{ L: number; a: number; b: number }[]>([]);
   const initAcc     = useRef(0);
   const segFrames   = useRef<number[]>(Array(N_SEGS).fill(0));
   const yawRef      = useRef(0);
@@ -203,6 +205,19 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
     captured.current = true;
     cancelAnimationFrame(raf.current);
     stream.current?.getTracks().forEach((t) => t.stop());
+
+    // Compute + save skin tone from accumulated frontal samples
+    if (skinLabBuf.current.length >= 3) {
+      const buf = skinLabBuf.current;
+      const med = (arr: number[]) => { const s = [...arr].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+      const tone = computeSkinToneFromLab(
+        med(buf.map(v => v.L)),
+        med(buf.map(v => v.a)),
+        med(buf.map(v => v.b)),
+      );
+      localStorage.setItem("mellow_skin_tone", JSON.stringify(tone));
+    }
+
     const img = frontalImg.current;
     if (img) { setStatus("done"); setTimeout(() => onCapture(img, shape), 800); return; }
     const video = videoRef.current;
@@ -269,6 +284,12 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
         const c = cap.getContext("2d")!;
         c.translate(W, 0); c.scale(-1, 1); c.drawImage(video, 0, 0);
         frontalImg.current = cap.toDataURL("image/jpeg", 0.92);
+      }
+
+      // Sample skin tone from cheeks during frontal hold (accumulate LAB values)
+      if (isFrontal && !close && skinLabBuf.current.length < 30) {
+        const sample = sampleSkinToneFromVideo(video, lm);
+        if (sample) skinLabBuf.current.push(sample);
       }
 
       if (measureBuf.current.length >= 25) {
