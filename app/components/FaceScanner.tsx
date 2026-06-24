@@ -109,9 +109,9 @@ function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
 
 // ── Coverage ring ──────────────────────────────────────────────────────────
 const N_SEGS         = 8;
-const FRAMES_PER_SEG = 12;
-const INIT_FRAMES    = 20;
-const MIN_COVERED    = 5;
+const FRAMES_PER_SEG = 28;  // ~0.9s per segment at 30fps — forces deliberate rotation
+const INIT_FRAMES    = 35;  // ~1.2s frontal hold before scan phase begins
+const MIN_COVERED    = 7;   // 7/8 segments = near-full circle required
 const TICK_COUNT     = 36; // Face ID-style tick marks
 
 // Map (yaw,pitch) → ring segment 0–7
@@ -289,7 +289,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
       }
 
       // Sample skin tone from cheeks during frontal hold (accumulate LAB values)
-      if (isFrontal && !close && skinLabBuf.current.length < 30) {
+      if (isFrontal && !close && skinLabBuf.current.length < 90) {
         const sample = sampleSkinToneFromVideo(video, lm);
         if (sample) skinLabBuf.current.push(sample);
       }
