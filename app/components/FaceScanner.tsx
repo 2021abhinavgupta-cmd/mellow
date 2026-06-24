@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { sampleSkinToneFromVideo, computeSkinToneFromLab } from "@/app/lib/skinTone";
+import { sampleSkinToneFromVideo, computeSkinToneFromLab, type SkinToneResult } from "@/app/lib/skinTone";
 
 const WASM_URL  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
@@ -190,15 +190,16 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
   const yawRef      = useRef(0);
   const pitchRef    = useRef(0);
 
-  const [status,       setStatus]       = useState<"loading" | "scanning" | "done" | "error">("loading");
-  const [phase,        setPhase]        = useState<"init" | "scan">("init");
-  const [covered,      setCovered]      = useState<boolean[]>(Array(N_SEGS).fill(false));
-  const [coveredCount, setCoveredCount] = useState(0);
-  const [faceShape,    setFaceShape]    = useState<string | null>(null);
-  const [faceInView,   setFaceInView]   = useState(false);
-  const [tooClose,     setTooClose]     = useState(false);
-  const [initPct,      setInitPct]      = useState(0);
-  const [dotAngle,     setDotAngle]     = useState<number | null>(null);
+  const [status,         setStatus]         = useState<"loading" | "scanning" | "done" | "error">("loading");
+  const [phase,          setPhase]          = useState<"init" | "scan">("init");
+  const [covered,        setCovered]        = useState<boolean[]>(Array(N_SEGS).fill(false));
+  const [coveredCount,   setCoveredCount]   = useState(0);
+  const [faceShape,      setFaceShape]      = useState<string | null>(null);
+  const [faceInView,     setFaceInView]     = useState(false);
+  const [tooClose,       setTooClose]       = useState(false);
+  const [initPct,        setInitPct]        = useState(0);
+  const [dotAngle,       setDotAngle]       = useState<number | null>(null);
+  const [skinToneResult, setSkinToneResult] = useState<SkinToneResult | null>(null);
 
   const doCapture = useCallback((shape: string) => {
     if (captured.current) return;
@@ -216,6 +217,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
         med(buf.map(v => v.b)),
       );
       localStorage.setItem("mellow_skin_tone", JSON.stringify(tone));
+      setSkinToneResult(tone);
     }
 
     const img = frontalImg.current;
@@ -510,6 +512,18 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
                 {faceShape}
               </p>
               <p className="font-sans text-[0.6rem] tracking-[0.35em] uppercase text-brown-mid">face shape detected</p>
+              {skinToneResult && (
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="w-6 h-6 rounded-full border border-black/10 flex-shrink-0"
+                    style={{ backgroundColor: skinToneResult.hex }} />
+                  <div className="text-left">
+                    <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-brown-mid">
+                      {skinToneResult.hex} · Fitzpatrick {["","I","II","III","IV","V","VI"][skinToneResult.fitzpatrick]}
+                    </p>
+                    <p className="font-sans text-[0.58rem] text-brown-mid/70">{skinToneResult.label.split("(")[0].trim()}</p>
+                  </div>
+                </div>
+              )}
             </motion.div>
           )}
 

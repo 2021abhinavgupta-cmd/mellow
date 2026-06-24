@@ -39,11 +39,12 @@ const fadeUp = (delay: number) => ({
 
 export default function Home() {
   const router = useRouter();
-  const [image,       setImage]       = useState<string | null>(null);
-  const [gender,      setGender]      = useState<"male" | "female" | null>(null);
-  const [faceShape,   setFaceShape]   = useState<string | null>(null);
-  const [showScanner, setShowScanner] = useState(false);
-  const [dragging,    setDragging]    = useState(false);
+  const [image,        setImage]        = useState<string | null>(null);
+  const [gender,       setGender]       = useState<"male" | "female" | null>(null);
+  const [faceShape,    setFaceShape]    = useState<string | null>(null);
+  const [skinToneHex,  setSkinToneHex]  = useState<string | null>(null);
+  const [showScanner,  setShowScanner]  = useState(false);
+  const [dragging,     setDragging]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const compressImage = useCallback((dataUrl: string): Promise<string> =>
@@ -68,7 +69,8 @@ export default function Home() {
       const raw = e.target?.result as string;
       const compressed = await compressImage(raw);
       setImage(compressed);
-      setFaceShape(null); // uploaded photo — no scan data
+      setFaceShape(null);   // uploaded photo — no scan data
+      setSkinToneHex(null);
       setGender(null);
     };
     reader.readAsDataURL(file);
@@ -78,6 +80,11 @@ export default function Home() {
     const compressed = await compressImage(dataUrl);
     setImage(compressed);
     setFaceShape(shape);
+    // Read hex that FaceScanner already wrote to localStorage
+    try {
+      const raw = localStorage.getItem("mellow_skin_tone");
+      if (raw) setSkinToneHex(JSON.parse(raw).hex ?? null);
+    } catch { /* ignore */ }
     setShowScanner(false);
   }, [compressImage]);
 
@@ -262,11 +269,19 @@ export default function Home() {
                 className="w-full h-80 object-cover"
               />
 
-              {/* Face shape badge — only shown when captured from scanner */}
+              {/* Face shape + skin tone badge — only shown when captured from scanner */}
               {faceShape && (
                 <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 z-10 flex items-center gap-1.5">
                   <Camera className="w-3 h-3 text-brown-mid" strokeWidth={1.5} />
                   <span className="font-sans text-xs text-brown-dark">{faceShape} Face</span>
+                  {skinToneHex && (
+                    <>
+                      <span className="text-brown-light/60 text-xs">·</span>
+                      <div className="w-3.5 h-3.5 rounded-full border border-black/10 flex-shrink-0"
+                        style={{ backgroundColor: skinToneHex }} />
+                      <span className="font-sans text-[0.65rem] text-brown-mid">{skinToneHex}</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -275,6 +290,7 @@ export default function Home() {
                   e.stopPropagation();
                   setImage(null);
                   setFaceShape(null);
+                  setSkinToneHex(null);
                 }}
                 className="absolute top-3 right-10 bg-white/80 backdrop-blur-sm rounded-full px-3 py-1 text-xs text-brown-dark font-sans z-10 hover:bg-white transition-colors"
               >
