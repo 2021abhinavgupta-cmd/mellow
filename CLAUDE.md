@@ -281,18 +281,28 @@ Adding new sub-pages:
 
 ## FaceScanner (`app/components/FaceScanner.tsx`)
 
-MediaPipe FaceLandmarker-based scanner. Timing constants control scan duration — tune these to require full rotation like Face ID:
+### Two-layer architecture
+
+**Layer 1 — MediaPipe FaceLandmarker** (Google pre-trained ML model): detects face, outputs 478 landmark (x,y,z) coordinates. Does NOT determine face shape.
+
+**Layer 2 — Geometric classifier** (`classifyFromAvg`): pure math on landmark coordinates — computes ratios (jaw/cheek, forehead/cheek, face length/cheek, chin/cheek) and jaw corner angles → point-based scoring → shape. No ML, no training data, no reference photos needed.
+
+This is why lighting/distance affects accuracy — MediaPipe needs a clear face to place landmarks accurately.
+
+### Timing constants
+
+Tune these to control scan difficulty:
 
 | Constant | Value | Effect |
 |---|---|---|
 | `N_SEGS` | `8` | Coverage ring divided into 8 arc segments |
-| `SEG_REQUIRED_MS` | `1400` | Milliseconds of dwell required per segment (device-framerate independent) |
-| `INIT_REQUIRED_MS` | `3000` | Milliseconds of frontal hold before rotation phase |
+| `SEG_REQUIRED_MS` | `500` | Milliseconds of dwell per segment — ticks fill in real-time while user holds position |
+| `INIT_REQUIRED_MS` | `1500` | Milliseconds of frontal hold before rotation phase |
 | `MIN_COVERED` | `7` | Segments required to complete (7/8 = ~315°) |
 
 Timing is **time-based** (ms), not frame-based — works correctly at 30fps, 60fps, or 120fps.
 
-Measurements accumulate **only when face is frontal** (`|yaw| < 0.10 && |pitch| < 0.12`) — side-view frames are excluded to prevent perspective distortion corrupting face shape ratios.
+Measurements accumulate **only when face is frontal** (`|yaw| < 0.15 && |pitch| < 0.18`) — side-view frames excluded to prevent perspective distortion corrupting ratios. Min 8 frontal samples required before scan can complete.
 
 Face shape classifier: Oval is a **last resort** — only scores when no other shape reaches ≥ 4 points. Other shapes use strong discriminators (jaw/cheek ratio, forehead-jaw differential, length ratio).
 
@@ -307,6 +317,10 @@ Face shape classifier: Oval is a **last resort** — only scores when no other s
 Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds relaxed by 0.02 for males (wider chins). Round requires `lenR < 1.15` for males vs 1.20 for females.
 
 UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(201,168,130,0.45)` (brown-light at 45% opacity). Never use black/white/green — those are Apple Face ID colors, not Mellow brand.
+
+Real-time tick fill: `activeSeg` + `activeSegPct` states update every frame in scan phase; pending segment ticks interpolate `rgba(139,99,71,0.3→1.0)` as dwell accumulates. No CSS transition on pending ticks — must feel instant.
+
+Post-scan UI: `fromScan` flag in `page.tsx` — when `true`, shows face shape card (shape name + skin tone swatch, no photo). Photo still saved to localStorage for GPT-4o. Upload path always shows photo preview (`fromScan = false`).
 
 ## Design system
 
