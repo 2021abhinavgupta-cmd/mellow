@@ -433,11 +433,11 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
 
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+    <div className="fixed inset-0 z-50 bg-cream flex flex-col items-center justify-center">
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-5 left-5 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-colors"
+        className="absolute top-5 left-5 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-brown-light/20 text-brown-dark hover:text-brown-dark hover:bg-brown-light/40 transition-colors"
       >
         <X className="w-4 h-4" />
       </button>
@@ -448,7 +448,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
         style={{ width: "calc(min(72vw, 340px) + 32px)", height: "calc(min(72vw, 340px) + 32px)" }}
       >
         {/* Circular video */}
-        <div className="absolute rounded-full overflow-hidden bg-black" style={{ inset: 16 }}>
+        <div className="absolute rounded-full overflow-hidden bg-brown-dark" style={{ inset: 16 }}>
           <video
             ref={videoRef}
             playsInline
@@ -464,21 +464,21 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
 
           {/* Positioning guide — dashed circle when no face detected */}
           {status === "scanning" && !faceInView && (
-            <div className="absolute inset-[12%] rounded-full border border-dashed border-white/25 pointer-events-none" />
+            <div className="absolute inset-[12%] rounded-full border border-dashed border-brown-light/40 pointer-events-none" />
           )}
 
           {/* Loading overlay */}
           {status === "loading" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black">
-              <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center bg-brown-dark">
+              <div className="w-8 h-8 border-2 border-brown-light/30 border-t-brown-light rounded-full animate-spin" />
             </div>
           )}
 
           {/* Error overlay */}
           {status === "error" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black p-6 text-center gap-3">
-              <p className="font-sans text-sm text-white">Camera access denied or unavailable.</p>
-              <button onClick={onClose} className="font-sans text-xs text-white/50 underline underline-offset-2">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-brown-dark p-6 text-center gap-3">
+              <p className="font-sans text-sm text-cream">Camera access denied or unavailable.</p>
+              <button onClick={onClose} className="font-sans text-xs text-brown-light underline underline-offset-2">
                 Upload a photo instead
               </button>
             </div>
@@ -489,21 +489,21 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80"
+              className="absolute inset-0 flex flex-col items-center justify-center bg-cream/90"
             >
-              <p className="font-display text-4xl text-white" style={{ fontStyle: "italic", fontWeight: 300 }}>
+              <p className="font-display text-4xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
                 {faceShape}
               </p>
-              <p className="font-sans text-[0.55rem] tracking-[0.35em] uppercase text-white/50 mt-1">
+              <p className="font-sans text-[0.55rem] tracking-[0.35em] uppercase text-brown-mid mt-1">
                 face shape detected
               </p>
               {skinToneResult && (
                 <div className="flex items-center gap-2 mt-3">
                   <div
-                    className="w-5 h-5 rounded-full border border-white/20 flex-shrink-0"
+                    className="w-5 h-5 rounded-full border border-brown-light flex-shrink-0"
                     style={{ backgroundColor: skinToneResult.hex }}
                   />
-                  <p className="font-sans text-[0.55rem] tracking-[0.2em] uppercase text-white/50">
+                  <p className="font-sans text-[0.55rem] tracking-[0.2em] uppercase text-brown-mid">
                     {skinToneResult.hex}
                   </p>
                 </div>
@@ -525,7 +525,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
                   key={i}
                   x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
                   x2={50 + 49 * Math.cos(angle)} y2={50 + 49 * Math.sin(angle)}
-                  stroke={isGreen ? "#22c55e" : "rgba(255,255,255,0.22)"}
+                  stroke={isGreen ? "#8B6347" : "rgba(201,168,130,0.45)"}
                   strokeWidth="2"
                   strokeLinecap="round"
                   style={{ transition: "stroke 0.4s ease" }}
@@ -538,7 +538,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
               <circle
                 cx={50} cy={50} r={47}
                 fill="none"
-                stroke="#22c55e"
+                stroke="#8B6347"
                 strokeWidth="1.5"
                 strokeLinecap="round"
                 pathLength={100}
@@ -562,7 +562,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="text-white text-lg font-sans font-medium leading-snug"
+              className="text-brown-dark text-lg font-sans font-medium leading-snug"
             >
               {tooClose
                 ? "Move back a little"
@@ -578,13 +578,13 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
 
       {/* Loading text */}
       {status === "loading" && (
-        <p className="mt-8 font-sans text-[0.6rem] text-white/30 tracking-[0.3em] uppercase">
+        <p className="mt-8 font-sans text-[0.6rem] text-brown-mid/50 tracking-[0.3em] uppercase">
           Loading scanner
         </p>
       )}
 
       {/* Privacy note */}
-      <p className="absolute bottom-6 font-sans text-[0.58rem] text-white/20 tracking-wide text-center px-8">
+      <p className="absolute bottom-6 font-sans text-[0.58rem] text-brown-mid/40 tracking-wide text-center px-8">
         Camera stays on your device — nothing uploaded during scanning
       </p>
     </div>
