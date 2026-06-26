@@ -44,6 +44,7 @@ export default function Home() {
   const [faceShape,    setFaceShape]    = useState<string | null>(null);
   const [skinToneHex,  setSkinToneHex]  = useState<string | null>(null);
   const [showScanner,  setShowScanner]  = useState(false);
+  const [pendingScanner, setPendingScanner] = useState(false);
   const [dragging,     setDragging]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -64,6 +65,7 @@ export default function Home() {
 
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
+    setPendingScanner(false);
     const reader = new FileReader();
     reader.onload = async (e) => {
       const raw = e.target?.result as string;
@@ -132,6 +134,7 @@ export default function Home() {
     <main className="min-h-screen bg-cream">
       {showScanner && (
         <FaceScanner
+          gender={gender ?? "female"}
           onCapture={handleScanCapture}
           onClose={() => setShowScanner(false)}
         />
@@ -188,29 +191,61 @@ export default function Home() {
         <motion.div {...fadeUp(0.65)} className="mt-14 w-full max-w-md">
           {!image && (
             <>
-              {/* PRIMARY: face scan */}
-              <button
-                onClick={() => setShowScanner(true)}
-                className="w-full relative cursor-pointer rounded-2xl border-2 border-brown-mid bg-white/60 hover:bg-white/85 hover:border-brown-dark transition-all duration-300 px-10 py-12 flex flex-col items-center gap-5 group"
-              >
-                {/* Corner brackets */}
-                <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
-                <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
-                <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
-                <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
-
-                <div className="w-16 h-16 rounded-full bg-brown-dark flex items-center justify-center">
-                  <Camera className="w-7 h-7 text-cream" strokeWidth={1.5} />
+              {/* PRIMARY: face scan — or gender picker before scan */}
+              {!pendingScanner ? (
+                <button
+                  onClick={() => setPendingScanner(true)}
+                  className="w-full relative cursor-pointer rounded-2xl border-2 border-brown-mid bg-white/60 hover:bg-white/85 hover:border-brown-dark transition-all duration-300 px-10 py-12 flex flex-col items-center gap-5 group"
+                >
+                  <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                  <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                  <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                  <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/50 group-hover:border-brown-dark/50 transition-colors" />
+                  <div className="w-16 h-16 rounded-full bg-brown-dark flex items-center justify-center">
+                    <Camera className="w-7 h-7 text-cream" strokeWidth={1.5} />
+                  </div>
+                  <div className="text-center">
+                    <p className="font-display text-2xl text-brown-dark" style={{ fontWeight: 400 }}>
+                      Scan Your Face
+                    </p>
+                    <p className="font-sans text-sm text-brown-mid mt-1.5 leading-relaxed">
+                      Camera detects face shape & captures your photo automatically
+                    </p>
+                  </div>
+                </button>
+              ) : (
+                <div className="w-full relative rounded-2xl border-2 border-brown-mid bg-white/60 px-10 py-12 flex flex-col items-center gap-5">
+                  <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50" />
+                  <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50" />
+                  <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/50" />
+                  <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/50" />
+                  <div className="text-center">
+                    <p className="font-display text-2xl text-brown-dark" style={{ fontWeight: 400 }}>
+                      Before we scan
+                    </p>
+                    <p className="font-sans text-sm text-brown-mid mt-1.5">
+                      I am —
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    {(["female", "male"] as const).map((g) => (
+                      <button
+                        key={g}
+                        onClick={() => { setGender(g); setShowScanner(true); setPendingScanner(false); }}
+                        className="py-3 rounded-xl font-sans text-sm tracking-[0.15em] uppercase border border-brown-light bg-white/50 text-brown-mid hover:bg-brown-dark hover:text-cream hover:border-brown-dark transition-all duration-200"
+                      >
+                        {g === "female" ? "Female" : "Male"}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setPendingScanner(false)}
+                    className="font-sans text-xs text-brown-mid/60 hover:text-brown-mid transition-colors"
+                  >
+                    ← Back
+                  </button>
                 </div>
-                <div className="text-center">
-                  <p className="font-display text-2xl text-brown-dark" style={{ fontWeight: 400 }}>
-                    Scan Your Face
-                  </p>
-                  <p className="font-sans text-sm text-brown-mid mt-1.5 leading-relaxed">
-                    Camera detects face shape & captures your photo automatically
-                  </p>
-                </div>
-              </button>
+              )}
 
               {/* SECONDARY: upload */}
               <div className="mt-5">

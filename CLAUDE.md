@@ -300,6 +300,14 @@ Face shape classifier: Oval is a **last resort** — only scores when no other s
 
 `skinLabBuf` cap is 90 so samples accumulate across full scan duration.
 
+`gender: "male" | "female"` — required prop. `page.tsx` uses `pendingScanner` state to show a gender picker before launching the scanner (gender known at scan start, not after).
+
+`classifyFromAvg(avg, debug, gender)` — 3rd param required at both call sites (live display + final capture). Defaults to `"female"` but must be passed explicitly.
+
+Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds relaxed by 0.02 for males (wider chins). Round requires `lenR < 1.15` for males vs 1.20 for females.
+
+UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(201,168,130,0.45)` (brown-light at 45% opacity). Never use black/white/green — those are Apple Face ID colors, not Mellow brand.
+
 ## Design system
 
 Warm editorial palette — do not deviate:

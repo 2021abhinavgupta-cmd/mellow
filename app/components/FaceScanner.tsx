@@ -75,16 +75,19 @@ function avgBuffer(buf: M[]): M {
   };
 }
 
-function classifyFromAvg(avg: M, debug = false): string {
+function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): string {
   const { foreW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
   const lenR  = faceLen / cheekW;
   const jawR  = jawW    / cheekW;
   const foreR = foreW   / cheekW;
   const chinR = chinW   / cheekW;
   const diff  = foreR   - jawR;
-  // jawAngle: low (<1.80 rad, ~103°) = angular jaw; high (>2.05 rad, ~118°) = soft jaw
-  const isAngular = jawAngle < 1.80;
-  const isSoft    = jawAngle > 2.05;
+  // Males have anatomically more acute gonion angles — require stricter threshold
+  // to avoid over-classifying male Oval/Round faces as Square
+  const angularThresh = gender === "male" ? 1.72 : 1.80;
+  const softThresh    = gender === "male" ? 2.10 : 2.05;
+  const isAngular = jawAngle < angularThresh;
+  const isSoft    = jawAngle > softThresh;
 
   const scores: Record<string, number> = {
     Long: 0, Rectangle: 0, Diamond: 0, Triangle: 0, "Inverted Triangle": 0,
@@ -119,12 +122,14 @@ function classifyFromAvg(avg: M, debug = false): string {
   if (isAngular && Math.abs(diff) < 0.08 && lenR < 1.32) scores.Square     += 4;
   else if (isAngular)                                     scores.Square     += 2;
   if (isAngular && lenR > 1.28)                           scores.Rectangle  += 3;
-  if (isSoft && lenR < 1.20)                              scores.Round      += 3;
+  if (isSoft && lenR < (gender === "male" ? 1.15 : 1.20)) scores.Round      += 3;
   else if (isSoft)                                        scores.Round      += 1;
 
-  // Chin narrowness — strong Heart discriminator (separates Heart from Oval)
-  if (chinR < 0.44 && foreR > 0.86)      scores.Heart += 4;
-  else if (chinR < 0.48 && foreR > 0.82) scores.Heart += 2;
+  // Chin narrowness — strong Heart discriminator; male chins wider at baseline
+  const heartChinA = gender === "male" ? 0.46 : 0.44;
+  const heartChinB = gender === "male" ? 0.50 : 0.48;
+  if (chinR < heartChinA && foreR > 0.86)      scores.Heart += 4;
+  else if (chinR < heartChinB && foreR > 0.82) scores.Heart += 2;
 
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
   if (foreR > 0.94 && jawR < 0.72)      scores["Inverted Triangle"] += 8;
@@ -248,11 +253,12 @@ function drawFace(ctx: CanvasRenderingContext2D, lm: Lm[], W: number, H: number)
 
 // ── Component ──────────────────────────────────────────────────────────────
 interface Props {
+  gender: "male" | "female";
   onCapture: (imageDataUrl: string, faceShape: string) => void;
   onClose: () => void;
 }
 
-export default function FaceScanner({ onCapture, onClose }: Props) {
+export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const videoRef    = useRef<HTMLVideoElement>(null);
   const canvasRef   = useRef<HTMLCanvasElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -376,7 +382,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
       }
 
       if (measureBuf.current.length >= 15) {
-        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current))); // live display, no log
+        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current), false, gender)); // live display, no log
       }
 
       // Time delta — capped at 100ms to avoid huge jumps after tab switch
@@ -403,7 +409,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
               const count = next.filter(Boolean).length;
               setCoveredCount(count);
               if (count >= MIN_COVERED && measureBuf.current.length >= 15) {
-                const shape = classifyFromAvg(avgBuffer(measureBuf.current), true); // final, log it
+                const shape = classifyFromAvg(avgBuffer(measureBuf.current), true, gender); // final, log it
                 setFaceShape(shape);
                 doCapture(shape);
               }
