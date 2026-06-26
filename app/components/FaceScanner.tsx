@@ -129,6 +129,9 @@ function classifyFromAvg(avg: M): string {
   }
 
   const winner = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), diff: +diff.toFixed(3) });
+  console.log("[FaceShape] scores", Object.fromEntries(winner));
+  console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
   return winner[0][1] > 0 ? winner[0][0] : "Oval";
 }
 
