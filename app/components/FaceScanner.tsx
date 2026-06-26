@@ -103,18 +103,18 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Jaw/cheek ratio
   if (jawR > 0.86)       scores.Triangle += 6;
   else if (jawR > 0.82)  { scores.Triangle += 2; scores.Square += 2; }
-  if (jawR < 0.72)       { scores.Heart += 4; scores.Diamond += 2; }
-  else if (jawR < 0.76)  scores.Heart += 2;
+  if (jawR < 0.68)       { scores.Heart += 4; scores.Diamond += 2; }  // true Heart: very narrow jaw
+  else if (jawR < 0.72)  scores.Heart += 2;
 
-  // Forehead/cheek ratio
-  if (foreR > 0.90)      scores.Heart   += 4;
-  else if (foreR > 0.86) scores.Heart   += 2;
+  // Forehead/cheek ratio — Heart needs genuinely wide forehead (not just slightly wider)
+  if (foreR > 0.93)      scores.Heart   += 4;
+  else if (foreR > 0.89) scores.Heart   += 2;
   if (foreR < 0.79)      scores.Diamond += 4;
   else if (foreR < 0.84) scores.Diamond += 2;
 
-  // Forehead-jaw differential — recalibrated: compressed range is -0.12 to +0.14
-  if (diff > 0.12)       scores.Heart    += 6;
-  else if (diff > 0.06)  scores.Heart    += 3;
+  // Forehead-jaw differential — raised: avg face diff ≈ 0.07–0.10, true Heart ≈ 0.18+
+  if (diff > 0.18)       scores.Heart    += 6;
+  else if (diff > 0.12)  scores.Heart    += 3;
   if (diff < -0.10)      scores.Triangle += 6;
   else if (diff < -0.05) scores.Triangle += 3;
 
@@ -125,11 +125,11 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (isSoft && lenR < (gender === "male" ? 1.15 : 1.20)) scores.Round      += 3;
   else if (isSoft)                                        scores.Round      += 1;
 
-  // Chin narrowness — strong Heart discriminator; male chins wider at baseline
-  const heartChinA = gender === "male" ? 0.46 : 0.44;
-  const heartChinB = gender === "male" ? 0.50 : 0.48;
-  if (chinR < heartChinA && foreR > 0.86)      scores.Heart += 4;
-  else if (chinR < heartChinB && foreR > 0.82) scores.Heart += 2;
+  // Chin narrowness — true Heart has very narrow pointed chin; tightened significantly
+  const heartChinA = gender === "male" ? 0.41 : 0.39;
+  const heartChinB = gender === "male" ? 0.44 : 0.42;
+  if (chinR < heartChinA && foreR > 0.89)      scores.Heart += 4;
+  else if (chinR < heartChinB && foreR > 0.85) scores.Heart += 2;
 
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
   if (foreR > 0.94 && jawR < 0.72)      scores["Inverted Triangle"] += 8;
