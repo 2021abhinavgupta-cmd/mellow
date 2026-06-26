@@ -284,6 +284,8 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const [tooClose,       setTooClose]       = useState(false);
   const [initPct,        setInitPct]        = useState(0);
   const [dotAngle,       setDotAngle]       = useState<number | null>(null);
+  const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
+  const [activeSegPct,   setActiveSegPct]   = useState<number>(0);
   const [skinToneResult, setSkinToneResult] = useState<SkinToneResult | null>(null);
 
   const doCapture = useCallback((shape: string) => {
@@ -402,6 +404,9 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         if (!close) {
           const seg = getSegment(yaw, pitch);
           segTimeMs.current[seg] = Math.min(segTimeMs.current[seg] + deltaMs, SEG_REQUIRED_MS);
+          // Real-time tick fill: update active segment progress every frame
+          setActiveSeg(seg);
+          setActiveSegPct(segTimeMs.current[seg] / SEG_REQUIRED_MS);
           if (segTimeMs.current[seg] >= SEG_REQUIRED_MS) {
             setCovered(prev => {
               if (prev[seg]) return prev;
@@ -422,6 +427,8 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       setFaceInView(false);
       setTooClose(false);
       setDotAngle(null);
+      setActiveSeg(null);
+      setActiveSegPct(0);
       lastDetectT.current = 0; // reset delta so next frame doesn't get a huge gap
     }
 
@@ -560,16 +567,21 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
             {Array.from({ length: 40 }, (_, i) => {
               const angle = (i / 40) * 2 * Math.PI - Math.PI / 2;
               const seg = Math.floor((i / 40) * N_SEGS);
-              const isGreen = phase === "scan" && covered[seg];
+              const isDone    = phase === "scan" && covered[seg];
+              const isPending = phase === "scan" && !covered[seg] && seg === activeSeg;
               return (
                 <line
                   key={i}
                   x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
                   x2={50 + 49 * Math.cos(angle)} y2={50 + 49 * Math.sin(angle)}
-                  stroke={isGreen ? "#8B6347" : "rgba(201,168,130,0.45)"}
+                  stroke={
+                    isDone    ? "#8B6347" :
+                    isPending ? `rgba(139,99,71,${(0.3 + 0.7 * activeSegPct).toFixed(2)})` :
+                    "rgba(201,168,130,0.45)"
+                  }
                   strokeWidth="2"
                   strokeLinecap="round"
-                  style={{ transition: "stroke 0.4s ease" }}
+                  style={{ transition: isDone ? "stroke 0.15s ease" : "none" }}
                 />
               );
             })}
