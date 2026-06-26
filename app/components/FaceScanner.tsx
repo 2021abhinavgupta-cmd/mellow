@@ -195,7 +195,7 @@ function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
 const N_SEGS           = 8;
 const SEG_REQUIRED_MS  = 500;  // 0.5s dwell per segment — registers while still in position
 const INIT_REQUIRED_MS = 1500; // 1.5s frontal hold before rotation phase
-const MIN_COVERED      = 6;    // 6/8 segments = 270° coverage required
+const MIN_COVERED      = 7;    // 7/8 segments = 315° coverage required
 
 // Map (yaw,pitch) → ring segment 0–7
 // 0=top/frontal, 2=right, 4=bottom, 6=left  (clockwise from top)
