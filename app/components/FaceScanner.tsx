@@ -193,9 +193,9 @@ function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
 
 // ── Coverage ring ──────────────────────────────────────────────────────────
 const N_SEGS           = 8;
-const SEG_REQUIRED_MS  = 1400; // 1.4s dwell per segment — device-framerate independent
-const INIT_REQUIRED_MS = 3000; // 3s frontal hold before rotation phase
-const MIN_COVERED      = 7;    // 7/8 segments = near-full circle required
+const SEG_REQUIRED_MS  = 500;  // 0.5s dwell per segment — registers while still in position
+const INIT_REQUIRED_MS = 1500; // 1.5s frontal hold before rotation phase
+const MIN_COVERED      = 6;    // 6/8 segments = 270° coverage required
 
 // Map (yaw,pitch) → ring segment 0–7
 // 0=top/frontal, 2=right, 4=bottom, 6=left  (clockwise from top)
@@ -358,7 +358,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       // Compute dot angle for ring visualization
       setDotAngle(Math.atan2(yaw, -pitch) - Math.PI / 2);
 
-      const isFrontal = Math.abs(yaw) < 0.10 && Math.abs(pitch) < 0.12;
+      const isFrontal = Math.abs(yaw) < 0.15 && Math.abs(pitch) < 0.18;
 
       // Accumulate measurements ONLY when frontal — side-view data corrupts ratios
       if (isFrontal && !close) {
@@ -381,7 +381,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         if (sample) skinLabBuf.current.push(sample);
       }
 
-      if (measureBuf.current.length >= 15) {
+      if (measureBuf.current.length >= 8) {
         setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current), false, gender)); // live display, no log
       }
 
@@ -408,7 +408,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
               const next = [...prev]; next[seg] = true;
               const count = next.filter(Boolean).length;
               setCoveredCount(count);
-              if (count >= MIN_COVERED && measureBuf.current.length >= 15) {
+              if (count >= MIN_COVERED && measureBuf.current.length >= 8) {
                 const shape = classifyFromAvg(avgBuffer(measureBuf.current), true, gender); // final, log it
                 setFaceShape(shape);
                 doCapture(shape);
