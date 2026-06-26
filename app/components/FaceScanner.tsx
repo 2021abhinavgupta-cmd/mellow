@@ -418,12 +418,12 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
   const R_INNER = 0.76, R_OUTER_NORM = 0.85, R_OUTER_CARD = 0.94, R_DOT = 0.805;
 
   return (
-    <div className="fixed inset-0 z-50 bg-brown-dark/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 sm:p-4">
+    <div className="fixed inset-0 z-50 bg-brown-dark/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 sm:p-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.3 }}
-        className="relative bg-cream rounded-2xl overflow-hidden w-full max-w-sm shadow-2xl"
+        className="relative bg-cream rounded-2xl overflow-hidden w-full max-w-2xl shadow-2xl"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-brown-light/30">
