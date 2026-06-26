@@ -45,6 +45,7 @@ export default function Home() {
   const [skinToneHex,  setSkinToneHex]  = useState<string | null>(null);
   const [showScanner,  setShowScanner]  = useState(false);
   const [pendingScanner, setPendingScanner] = useState(false);
+  const [fromScan,     setFromScan]     = useState(false);
   const [dragging,     setDragging]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -66,6 +67,7 @@ export default function Home() {
   const handleFile = useCallback((file: File) => {
     if (!file.type.startsWith("image/")) return;
     setPendingScanner(false);
+    setFromScan(false);
     const reader = new FileReader();
     reader.onload = async (e) => {
       const raw = e.target?.result as string;
@@ -82,6 +84,7 @@ export default function Home() {
     const compressed = await compressImage(dataUrl);
     setImage(compressed);
     setFaceShape(shape);
+    setFromScan(true);
     // Read hex that FaceScanner already wrote to localStorage
     try {
       const raw = localStorage.getItem("mellow_skin_tone");
@@ -288,37 +291,53 @@ export default function Home() {
             </>
           )}
 
-          {/* Image preview — with face shape badge if from scan */}
-          {image && (
+          {/* Scan result card — no photo, just face shape + skin tone */}
+          {image && fromScan && (
+            <div className="relative rounded-2xl bg-white/60 border border-brown-light px-8 py-10 flex flex-col items-center gap-5">
+              <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/30" />
+              <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/30" />
+              <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/30" />
+              <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/30" />
+
+              <div className="w-12 h-12 rounded-full bg-brown-dark/10 flex items-center justify-center">
+                <Camera className="w-5 h-5 text-brown-dark" strokeWidth={1.5} />
+              </div>
+
+              {faceShape && (
+                <div className="text-center">
+                  <p className="font-sans text-[0.6rem] tracking-[0.3em] uppercase text-brown-mid mb-2">Face Shape</p>
+                  <p className="font-display text-4xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
+                    {faceShape}
+                  </p>
+                </div>
+              )}
+
+              {skinToneHex && (
+                <div className="flex items-center gap-2.5">
+                  <div className="w-5 h-5 rounded-full border border-black/10 flex-shrink-0" style={{ backgroundColor: skinToneHex }} />
+                  <span className="font-sans text-sm text-brown-mid">Skin tone {skinToneHex}</span>
+                </div>
+              )}
+
+              <button
+                onClick={() => { setImage(null); setFaceShape(null); setSkinToneHex(null); setFromScan(false); setGender(null); }}
+                className="font-sans text-xs text-brown-mid/60 hover:text-brown-mid transition-colors"
+              >
+                ← Rescan
+              </button>
+            </div>
+          )}
+
+          {/* Photo preview — upload path only */}
+          {image && !fromScan && (
             <div className="relative rounded-2xl overflow-hidden shadow-lg">
-              {/* Corner brackets on preview */}
               <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-white/60 z-10" />
               <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-white/60 z-10" />
               <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-white/60 z-10" />
               <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-white/60 z-10" />
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={image}
-                alt="Your portrait"
-                className="w-full h-80 object-cover"
-              />
-
-              {/* Face shape + skin tone badge — only shown when captured from scanner */}
-              {faceShape && (
-                <div className="absolute bottom-3 left-3 bg-white/85 backdrop-blur-sm rounded-full px-3 py-1.5 z-10 flex items-center gap-1.5">
-                  <Camera className="w-3 h-3 text-brown-mid" strokeWidth={1.5} />
-                  <span className="font-sans text-xs text-brown-dark">{faceShape} Face</span>
-                  {skinToneHex && (
-                    <>
-                      <span className="text-brown-light/60 text-xs">·</span>
-                      <div className="w-3.5 h-3.5 rounded-full border border-black/10 flex-shrink-0"
-                        style={{ backgroundColor: skinToneHex }} />
-                      <span className="font-sans text-[0.65rem] text-brown-mid">{skinToneHex}</span>
-                    </>
-                  )}
-                </div>
-              )}
+              <img src={image} alt="Your portrait" className="w-full h-80 object-cover" />
 
               <button
                 onClick={(e) => {
