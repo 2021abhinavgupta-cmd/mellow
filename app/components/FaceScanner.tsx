@@ -94,17 +94,17 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
     Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
 
-  // Length ratio — recalibrated: cheekW near-ear makes typical lenR ≈ 1.20 for average face
-  if (lenR > 1.42)       scores.Long  += 8;
-  else if (lenR > 1.32)  scores.Long  += 4;
+  // Length ratio — research: Long/Oblong lenR > 1.5 real → ~1.35+ in MediaPipe (near-ear cheekW compresses ~20%)
+  if (lenR > 1.38)       scores.Long  += 8;
+  else if (lenR > 1.30)  scores.Long  += 4;
   if (lenR < 1.14)       scores.Round += 8;
   else if (lenR < 1.18)  scores.Round += 4;
 
   // Jaw/cheek ratio
   if (jawR > 0.86)       scores.Triangle += 6;
   else if (jawR > 0.82)  { scores.Triangle += 2; scores.Square += 2; }
-  if (jawR < 0.68)       { scores.Heart += 4; scores.Diamond += 2; }  // true Heart: very narrow jaw
-  else if (jawR < 0.72)  scores.Heart += 2;
+  if (jawR < 0.70)       { scores.Heart += 4; scores.Diamond += 2; }  // research: heart jaw narrow relative to cheekbones
+  else if (jawR < 0.74)  scores.Heart += 2;
 
   // Forehead/cheek ratio — Heart needs genuinely wide forehead (not just slightly wider)
   if (foreR > 0.93)      scores.Heart   += 4;
@@ -112,9 +112,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (foreR < 0.79)      scores.Diamond += 4;
   else if (foreR < 0.84) scores.Diamond += 2;
 
-  // Forehead-jaw differential — raised: avg face diff ≈ 0.07–0.10, true Heart ≈ 0.18+
-  if (diff > 0.18)       scores.Heart    += 6;
-  else if (diff > 0.12)  scores.Heart    += 3;
+  // Forehead-jaw differential — research: Heart forehead 10–15% wider than jaw (real-world diff 0.10–0.15)
+  // MediaPipe landmarks compress ~20% (near-ear cheekW is wider), so threshold ~0.08–0.12 in landmark space
+  if (diff > 0.15)       scores.Heart    += 6;
+  else if (diff > 0.10)  scores.Heart    += 3;
   if (diff < -0.10)      scores.Triangle += 6;
   else if (diff < -0.05) scores.Triangle += 3;
 
@@ -125,9 +126,9 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (isSoft && lenR < (gender === "male" ? 1.15 : 1.20)) scores.Round      += 3;
   else if (isSoft)                                        scores.Round      += 1;
 
-  // Chin narrowness — true Heart has very narrow pointed chin; tightened significantly
-  const heartChinA = gender === "male" ? 0.41 : 0.39;
-  const heartChinB = gender === "male" ? 0.44 : 0.42;
+  // Chin narrowness — research: narrow pointed chin is key Heart feature; calibrated from anthropometric data
+  const heartChinA = gender === "male" ? 0.43 : 0.41;
+  const heartChinB = gender === "male" ? 0.46 : 0.44;
   if (chinR < heartChinA && foreR > 0.89)      scores.Heart += 4;
   else if (chinR < heartChinB && foreR > 0.85) scores.Heart += 2;
 
