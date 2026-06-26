@@ -63,7 +63,8 @@ function classifyFromAvg(avg: M): string {
   const diff  = foreR  - jawR;    // forehead-jaw differential
 
   const scores: Record<string, number> = {
-    Long: 0, Diamond: 0, Triangle: 0, Heart: 0, Round: 0, Square: 0, Oval: 0,
+    Long: 0, Rectangle: 0, Diamond: 0, Triangle: 0, "Inverted Triangle": 0,
+    Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
 
   // Length ratio
@@ -90,6 +91,18 @@ function classifyFromAvg(avg: M): string {
   if (diff < -0.15)      scores.Triangle += 6;
   else if (diff < -0.08) scores.Triangle += 3;
 
+  // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
+  // Distinguished from Heart: forehead > cheeks (not cheeks > forehead)
+  if (foreR > 0.94 && jawR < 0.72)       scores["Inverted Triangle"] += 8;
+  else if (foreR > 0.90 && jawR < 0.76)  scores["Inverted Triangle"] += 5;
+  else if (foreR > 0.86 && jawR < 0.78)  scores["Inverted Triangle"] += 3;
+
+  // Rectangle: long face + jaw nearly as wide as cheeks (angular, not tapered)
+  // Distinguished from Long (which tapers) and Square (which is short)
+  if (lenR > 1.42 && jawR > 0.80 && Math.abs(diff) < 0.12)       scores.Rectangle += 8;
+  else if (lenR > 1.35 && jawR > 0.77 && Math.abs(diff) < 0.15)  scores.Rectangle += 5;
+  else if (lenR > 1.28 && jawR > 0.75)                            scores.Rectangle += 3;
+
   // Square: jaw ≈ forehead, both wide, medium length
   if (Math.abs(diff) < 0.06 && jawR > 0.80) scores.Square += 6;
   else if (Math.abs(diff) < 0.10 && jawR > 0.76) scores.Square += 3;
@@ -100,9 +113,13 @@ function classifyFromAvg(avg: M): string {
   // Round bonus: wide + short
   if (jawR > 0.82 && foreR > 0.82 && lenR < 1.25) scores.Round += 3;
 
+  // Long bonus: narrow relative to length (tapered jaw, not square)
+  if (lenR > 1.52 && jawR < 0.80) scores.Long += 3;
+
   // Oval only scores when no other shape scores ≥ 4 (true last resort)
   const maxOther = Math.max(
-    scores.Long, scores.Diamond, scores.Triangle, scores.Heart, scores.Round, scores.Square
+    scores.Long, scores.Rectangle, scores.Diamond, scores.Triangle,
+    scores["Inverted Triangle"], scores.Heart, scores.Round, scores.Square
   );
   if (maxOther < 4) {
     if (lenR >= 1.22 && lenR <= 1.52) scores.Oval += 3;
