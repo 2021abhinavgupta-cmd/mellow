@@ -112,15 +112,16 @@ Route handler (app/api/generate-visuals/route.ts)
 |---|---|---|
 | `mellow_image` | Compressed base64 JPEG data URL | User uploads new photo |
 | `mellow_analysis` | Stringified `ColorAnalysis` JSON | User uploads new photo |
+| `mellow_gender` | `"male"` or `"female"` | User uploads new photo |
+| `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | User uploads new photo |
+| `mellow_skin_tone` | `SkinToneResult` JSON — ITA, Fitzpatrick, Monk, hex, LAB | User uploads new photo |
 
 Planned additions (not yet built):
 
 | Key | Value | Sprint |
 |---|---|---|
-| `mellow_gender` | `"male"` or `"female"` | Sprint 1 |
 | `mellow_measurements` | `{ bust, waist, hips, unit }` JSON | Sprint 1 |
 | `mellow_body_type` | e.g. `"Hourglass"` — calculated client-side from measurements | Sprint 1 |
-| `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | Sprint 2 |
 
 ### sessionStorage keys
 
@@ -277,6 +278,27 @@ Adding new sub-pages:
 3. Increase `max_tokens` if needed (currently 5000)
 4. Create `app/results/<name>/page.tsx` — reads `mellow_analysis` from localStorage (cache hit, no extra API call)
 5. Add CTA button on the preceding page and back-nav on the new page
+
+## FaceScanner (`app/components/FaceScanner.tsx`)
+
+MediaPipe FaceLandmarker-based scanner. Timing constants control scan duration — tune these to require full rotation like Face ID:
+
+| Constant | Value | Effect |
+|---|---|---|
+| `N_SEGS` | `8` | Coverage ring divided into 8 arc segments |
+| `SEG_REQUIRED_MS` | `1400` | Milliseconds of dwell required per segment (device-framerate independent) |
+| `INIT_REQUIRED_MS` | `3000` | Milliseconds of frontal hold before rotation phase |
+| `MIN_COVERED` | `7` | Segments required to complete (7/8 = ~315°) |
+
+Timing is **time-based** (ms), not frame-based — works correctly at 30fps, 60fps, or 120fps.
+
+Measurements accumulate **only when face is frontal** (`|yaw| < 0.10 && |pitch| < 0.12`) — side-view frames are excluded to prevent perspective distortion corrupting face shape ratios.
+
+Face shape classifier: Oval is a **last resort** — only scores when no other shape reaches ≥ 4 points. Other shapes use strong discriminators (jaw/cheek ratio, forehead-jaw differential, length ratio).
+
+`onCapture(imageDataUrl, faceShape)` — skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` to localStorage before firing callback; callers read it from there.
+
+`skinLabBuf` cap is 90 so samples accumulate across full scan duration.
 
 ## Design system
 

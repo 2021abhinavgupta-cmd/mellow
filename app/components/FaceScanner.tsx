@@ -56,39 +56,63 @@ function avgBuffer(buf: M[]): M {
 }
 
 function classifyFromAvg(avg: M): string {
-  const { foreW, eyeW, cheekW, jawW, faceLen } = avg;
-  const lenR  = faceLen / cheekW;
-  const jawR  = jawW    / cheekW;
-  const foreR = foreW   / cheekW;
-  const eyeR  = eyeW    / cheekW;
+  const { foreW, cheekW, jawW, faceLen } = avg;
+  const lenR = faceLen / cheekW;  // length/width ratio
+  const jawR = jawW    / cheekW;  // jaw vs cheekbone
+  const foreR = foreW  / cheekW;  // forehead vs cheekbone
+  const diff  = foreR  - jawR;    // forehead-jaw differential
 
   const scores: Record<string, number> = {
     Long: 0, Diamond: 0, Triangle: 0, Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
 
-  // Pixel-corrected thresholds (typical selfie on 640×480 front cam)
-  // Oval face ≈ 1.28–1.50, Round ≈ 0.95–1.20, Long > 1.55
-  scores.Long     += lenR > 1.55 ? 4 : lenR > 1.46 ? 2 : 0;
-  scores.Diamond  += foreR < 0.82 ? 2 : 0;
-  scores.Diamond  += jawR  < 0.78 ? 2 : 0;
-  scores.Diamond  += eyeR  > 0.84 ? 1 : 0;
-  scores.Diamond  += cheekW > foreW && cheekW > jawW ? 1 : 0;
-  scores.Triangle += (jawR - foreR) > 0.15 ? 4 : (jawR - foreR) > 0.10 ? 2 : 0;
-  scores.Heart    += (foreR - jawR) > 0.18 ? 4 : (foreR - jawR) > 0.12 ? 2 : 0;
-  scores.Heart    += foreR > 0.88 ? 1 : 0;
-  scores.Round    += lenR < 1.12 ? 3 : lenR < 1.20 ? 1 : 0;
-  scores.Round    += jawR > 0.84 ? 2 : jawR > 0.78 ? 1 : 0;
-  scores.Round    += foreR > 0.84 ? 1 : 0;
-  scores.Square   += lenR >= 1.10 && lenR < 1.35 ? 2 : 0;
-  scores.Square   += jawR > 0.82 ? 3 : jawR > 0.76 ? 1 : 0;
-  scores.Square   += Math.abs(foreR - jawR) < 0.08 ? 2 : 0;
-  scores.Oval     += lenR >= 1.22 && lenR <= 1.55 ? 3 : 0;
-  scores.Oval     += jawR >= 0.70 && jawR <= 0.84 ? 2 : 0;
-  scores.Oval     += foreR >= 0.78 && foreR <= 0.92 ? 2 : 0;
-  scores.Oval     += Math.abs(foreR - jawR) < 0.12 ? 1 : 0;
-  if (lenR > 1.46) scores.Oval = Math.max(0, scores.Oval - 3);
+  // Length ratio
+  if (lenR > 1.62)      scores.Long  += 8;
+  else if (lenR > 1.52) scores.Long  += 4;
+  if (lenR < 1.12)      scores.Round += 8;
+  else if (lenR < 1.20) scores.Round += 4;
 
-  return Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+  // Jaw/cheek ratio
+  if (jawR > 0.86)      scores.Triangle += 6;
+  else if (jawR > 0.82) { scores.Triangle += 2; scores.Square += 2; }
+  if (jawR < 0.70)      { scores.Heart += 4; scores.Diamond += 2; }
+  else if (jawR < 0.75) scores.Heart += 2;
+
+  // Forehead/cheek ratio
+  if (foreR > 0.93)      scores.Heart   += 4;
+  else if (foreR > 0.88) scores.Heart   += 2;
+  if (foreR < 0.77)      scores.Diamond += 4;
+  else if (foreR < 0.82) scores.Diamond += 2;
+
+  // Forehead-jaw differential (primary discriminator for Heart/Triangle)
+  if (diff > 0.22)       scores.Heart    += 6;
+  else if (diff > 0.15)  scores.Heart    += 3;
+  if (diff < -0.15)      scores.Triangle += 6;
+  else if (diff < -0.08) scores.Triangle += 3;
+
+  // Square: jaw ≈ forehead, both wide, medium length
+  if (Math.abs(diff) < 0.06 && jawR > 0.80) scores.Square += 6;
+  else if (Math.abs(diff) < 0.10 && jawR > 0.76) scores.Square += 3;
+
+  // Diamond: narrow forehead AND narrow jaw vs cheekbones
+  if (foreR < 0.80 && jawR < 0.76) scores.Diamond += 4;
+
+  // Round bonus: wide + short
+  if (jawR > 0.82 && foreR > 0.82 && lenR < 1.25) scores.Round += 3;
+
+  // Oval only scores when no other shape scores ≥ 4 (true last resort)
+  const maxOther = Math.max(
+    scores.Long, scores.Diamond, scores.Triangle, scores.Heart, scores.Round, scores.Square
+  );
+  if (maxOther < 4) {
+    if (lenR >= 1.22 && lenR <= 1.52) scores.Oval += 3;
+    if (jawR >= 0.72 && jawR <= 0.82) scores.Oval += 2;
+    if (foreR >= 0.80 && foreR <= 0.91) scores.Oval += 2;
+    if (Math.abs(diff) < 0.12) scores.Oval += 1;
+  }
+
+  const winner = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+  return winner[0][1] > 0 ? winner[0][0] : "Oval";
 }
 
 // ── Pose from 3D transformation matrix (column-major 4×4) ─────────────────
@@ -108,11 +132,11 @@ function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
 }
 
 // ── Coverage ring ──────────────────────────────────────────────────────────
-const N_SEGS         = 8;
-const FRAMES_PER_SEG = 28;  // ~0.9s per segment at 30fps — forces deliberate rotation
-const INIT_FRAMES    = 35;  // ~1.2s frontal hold before scan phase begins
-const MIN_COVERED    = 7;   // 7/8 segments = near-full circle required
-const TICK_COUNT     = 36; // Face ID-style tick marks
+const N_SEGS           = 8;
+const SEG_REQUIRED_MS  = 1400; // 1.4s dwell per segment — device-framerate independent
+const INIT_REQUIRED_MS = 3000; // 3s frontal hold before rotation phase
+const MIN_COVERED      = 7;    // 7/8 segments = near-full circle required
+const TICK_COUNT       = 36;   // Face ID-style tick marks
 
 // Map (yaw,pitch) → ring segment 0–7
 // 0=top/frontal, 2=right, 4=bottom, 6=left  (clockwise from top)
@@ -185,8 +209,9 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
   const measureBuf  = useRef<M[]>([]);
   const frontalImg  = useRef<string | null>(null);
   const skinLabBuf  = useRef<{ L: number; a: number; b: number }[]>([]);
-  const initAcc     = useRef(0);
-  const segFrames   = useRef<number[]>(Array(N_SEGS).fill(0));
+  const initTimeMs  = useRef(0);
+  const segTimeMs   = useRef<number[]>(Array(N_SEGS).fill(0));
+  const lastDetectT = useRef(0);
   const yawRef      = useRef(0);
   const pitchRef    = useRef(0);
 
@@ -259,10 +284,6 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
       const close = cheekWnorm > 0.52;
       setTooClose(close);
 
-      // Accumulate pixel-space measurements
-      measureBuf.current.push(measure(lm, W, H));
-      if (measureBuf.current.length > 200) measureBuf.current.shift();
-
       // Pose: prefer transformation matrix (true 3D), fall back to landmarks
       let pose: { yaw: number; pitch: number };
       if (results.facialTransformationMatrixes?.length > 0) {
@@ -279,6 +300,12 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
 
       const isFrontal = Math.abs(yaw) < 0.10 && Math.abs(pitch) < 0.12;
 
+      // Accumulate measurements ONLY when frontal — side-view data corrupts ratios
+      if (isFrontal && !close) {
+        measureBuf.current.push(measure(lm, W, H));
+        if (measureBuf.current.length > 200) measureBuf.current.shift();
+      }
+
       // Save best frontal frame for GPT-4o (90% quality, non-mirrored)
       if (isFrontal && !frontalImg.current && !close) {
         const cap = document.createElement("canvas");
@@ -294,29 +321,34 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
         if (sample) skinLabBuf.current.push(sample);
       }
 
-      if (measureBuf.current.length >= 25) {
+      if (measureBuf.current.length >= 15) {
         setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current)));
       }
 
-      // Phase 1: frontal hold
-      if (initAcc.current < INIT_FRAMES) {
-        initAcc.current = isFrontal && !close
-          ? Math.min(initAcc.current + 1, INIT_FRAMES)
-          : Math.max(0, initAcc.current - 0.5);
-        setInitPct(initAcc.current / INIT_FRAMES);
-        if (initAcc.current >= INIT_FRAMES) setPhase("scan");
+      // Time delta — capped at 100ms to avoid huge jumps after tab switch
+      const now = performance.now();
+      const deltaMs = lastDetectT.current > 0 ? Math.min(now - lastDetectT.current, 100) : 16;
+      lastDetectT.current = now;
+
+      // Phase 1: frontal hold (time-based, device-framerate independent)
+      if (initTimeMs.current < INIT_REQUIRED_MS) {
+        initTimeMs.current = isFrontal && !close
+          ? initTimeMs.current + deltaMs
+          : Math.max(0, initTimeMs.current - deltaMs * 0.5);
+        setInitPct(initTimeMs.current / INIT_REQUIRED_MS);
+        if (initTimeMs.current >= INIT_REQUIRED_MS) setPhase("scan");
       } else {
-        // Phase 2: circular coverage
+        // Phase 2: circular coverage (time-based)
         if (!close) {
           const seg = getSegment(yaw, pitch);
-          segFrames.current[seg] = Math.min(segFrames.current[seg] + 1, FRAMES_PER_SEG);
-          if (segFrames.current[seg] >= FRAMES_PER_SEG) {
+          segTimeMs.current[seg] = Math.min(segTimeMs.current[seg] + deltaMs, SEG_REQUIRED_MS);
+          if (segTimeMs.current[seg] >= SEG_REQUIRED_MS) {
             setCovered(prev => {
               if (prev[seg]) return prev;
               const next = [...prev]; next[seg] = true;
               const count = next.filter(Boolean).length;
               setCoveredCount(count);
-              if (count >= MIN_COVERED && measureBuf.current.length >= 30) {
+              if (count >= MIN_COVERED && measureBuf.current.length >= 15) {
                 const shape = classifyFromAvg(avgBuffer(measureBuf.current));
                 setFaceShape(shape);
                 doCapture(shape);
@@ -330,7 +362,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
       setFaceInView(false);
       setTooClose(false);
       setDotAngle(null);
-      initAcc.current = Math.max(0, initAcc.current - 1);
+      lastDetectT.current = 0; // reset delta so next frame doesn't get a huge gap
     }
 
     raf.current = requestAnimationFrame(detect);
