@@ -55,83 +55,83 @@ function avgBuffer(buf: M[]): M {
   };
 }
 
-function classifyFromAvg(avg: M): string {
+function classifyFromAvg(avg: M, debug = false): string {
   const { foreW, cheekW, jawW, faceLen } = avg;
-  const lenR = faceLen / cheekW;  // length/width ratio
-  const jawR = jawW    / cheekW;  // jaw vs cheekbone
-  const foreR = foreW  / cheekW;  // forehead vs cheekbone
-  const diff  = foreR  - jawR;    // forehead-jaw differential
+  const lenR  = faceLen / cheekW;
+  const jawR  = jawW    / cheekW;
+  const foreR = foreW   / cheekW;
+  const diff  = foreR   - jawR;
 
   const scores: Record<string, number> = {
     Long: 0, Rectangle: 0, Diamond: 0, Triangle: 0, "Inverted Triangle": 0,
     Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
 
-  // Length ratio
-  if (lenR > 1.62)      scores.Long  += 8;
-  else if (lenR > 1.52) scores.Long  += 4;
-  if (lenR < 1.12)      scores.Round += 8;
-  else if (lenR < 1.20) scores.Round += 4;
+  // Length ratio — recalibrated: cheekW near-ear makes typical lenR ≈ 1.20 for average face
+  if (lenR > 1.42)       scores.Long  += 8;
+  else if (lenR > 1.32)  scores.Long  += 4;
+  if (lenR < 1.14)       scores.Round += 8;
+  else if (lenR < 1.18)  scores.Round += 4;
 
   // Jaw/cheek ratio
-  if (jawR > 0.86)      scores.Triangle += 6;
-  else if (jawR > 0.82) { scores.Triangle += 2; scores.Square += 2; }
-  if (jawR < 0.70)      { scores.Heart += 4; scores.Diamond += 2; }
-  else if (jawR < 0.75) scores.Heart += 2;
+  if (jawR > 0.86)       scores.Triangle += 6;
+  else if (jawR > 0.82)  { scores.Triangle += 2; scores.Square += 2; }
+  if (jawR < 0.72)       { scores.Heart += 4; scores.Diamond += 2; }
+  else if (jawR < 0.76)  scores.Heart += 2;
 
   // Forehead/cheek ratio
-  if (foreR > 0.93)      scores.Heart   += 4;
-  else if (foreR > 0.88) scores.Heart   += 2;
-  if (foreR < 0.77)      scores.Diamond += 4;
-  else if (foreR < 0.82) scores.Diamond += 2;
+  if (foreR > 0.90)      scores.Heart   += 4;
+  else if (foreR > 0.86) scores.Heart   += 2;
+  if (foreR < 0.79)      scores.Diamond += 4;
+  else if (foreR < 0.84) scores.Diamond += 2;
 
-  // Forehead-jaw differential (primary discriminator for Heart/Triangle)
-  if (diff > 0.22)       scores.Heart    += 6;
-  else if (diff > 0.15)  scores.Heart    += 3;
-  if (diff < -0.15)      scores.Triangle += 6;
-  else if (diff < -0.08) scores.Triangle += 3;
+  // Forehead-jaw differential — recalibrated: compressed range is -0.12 to +0.14
+  if (diff > 0.12)       scores.Heart    += 6;
+  else if (diff > 0.06)  scores.Heart    += 3;
+  if (diff < -0.10)      scores.Triangle += 6;
+  else if (diff < -0.05) scores.Triangle += 3;
 
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
-  // Distinguished from Heart: forehead > cheeks (not cheeks > forehead)
-  if (foreR > 0.94 && jawR < 0.72)       scores["Inverted Triangle"] += 8;
-  else if (foreR > 0.90 && jawR < 0.76)  scores["Inverted Triangle"] += 5;
-  else if (foreR > 0.86 && jawR < 0.78)  scores["Inverted Triangle"] += 3;
+  if (foreR > 0.94 && jawR < 0.72)      scores["Inverted Triangle"] += 8;
+  else if (foreR > 0.90 && jawR < 0.76) scores["Inverted Triangle"] += 5;
+  else if (foreR > 0.86 && jawR < 0.78) scores["Inverted Triangle"] += 3;
 
-  // Rectangle: long face + jaw nearly as wide as cheeks (angular, not tapered)
-  // Distinguished from Long (which tapers) and Square (which is short)
-  if (lenR > 1.42 && jawR > 0.80 && Math.abs(diff) < 0.12)       scores.Rectangle += 8;
-  else if (lenR > 1.35 && jawR > 0.77 && Math.abs(diff) < 0.15)  scores.Rectangle += 5;
-  else if (lenR > 1.28 && jawR > 0.75)                            scores.Rectangle += 3;
+  // Rectangle: long + wide angular jaw (not tapered like Long, not short like Square)
+  if (lenR > 1.30 && jawR > 0.80 && Math.abs(diff) < 0.10)      scores.Rectangle += 8;
+  else if (lenR > 1.24 && jawR > 0.77 && Math.abs(diff) < 0.12) scores.Rectangle += 5;
+  else if (lenR > 1.18 && jawR > 0.75)                           scores.Rectangle += 3;
 
-  // Square: jaw ≈ forehead, both wide, medium length
-  if (Math.abs(diff) < 0.06 && jawR > 0.80) scores.Square += 6;
-  else if (Math.abs(diff) < 0.10 && jawR > 0.76) scores.Square += 3;
+  // Square: jaw ≈ forehead, both wide, NOT long (lenR < 1.30 to separate from Rectangle)
+  if (Math.abs(diff) < 0.05 && jawR > 0.80 && foreR > 0.82 && lenR < 1.30) scores.Square += 7;
+  else if (Math.abs(diff) < 0.09 && jawR > 0.76)                             scores.Square += 3;
 
-  // Diamond: narrow forehead AND narrow jaw vs cheekbones
-  if (foreR < 0.80 && jawR < 0.76) scores.Diamond += 4;
+  // Diamond: narrow at both forehead and jaw vs cheekbones
+  if (foreR < 0.79 && jawR < 0.76) scores.Diamond += 4;
 
   // Round bonus: wide + short
-  if (jawR > 0.82 && foreR > 0.82 && lenR < 1.25) scores.Round += 3;
+  if (jawR > 0.82 && foreR > 0.82 && lenR < 1.18) scores.Round += 3;
 
-  // Long bonus: narrow relative to length (tapered jaw, not square)
-  if (lenR > 1.52 && jawR < 0.80) scores.Long += 3;
+  // Long bonus: elongated + tapered (narrow) jaw, not square
+  if (lenR > 1.42 && jawR < 0.78) scores.Long += 3;
 
-  // Oval only scores when no other shape scores ≥ 4 (true last resort)
+  // Oval only when no other shape scores ≥ 5 (true last resort)
   const maxOther = Math.max(
     scores.Long, scores.Rectangle, scores.Diamond, scores.Triangle,
     scores["Inverted Triangle"], scores.Heart, scores.Round, scores.Square
   );
-  if (maxOther < 4) {
-    if (lenR >= 1.22 && lenR <= 1.52) scores.Oval += 3;
-    if (jawR >= 0.72 && jawR <= 0.82) scores.Oval += 2;
-    if (foreR >= 0.80 && foreR <= 0.91) scores.Oval += 2;
-    if (Math.abs(diff) < 0.12) scores.Oval += 1;
+  if (maxOther < 5) {
+    if (lenR >= 1.19 && lenR <= 1.32) scores.Oval += 3;
+    if (jawR >= 0.74 && jawR <= 0.84) scores.Oval += 2;
+    if (foreR >= 0.82 && foreR <= 0.91) scores.Oval += 2;
+    if (Math.abs(diff) < 0.07) scores.Oval += 1;
   }
 
   const winner = Object.entries(scores).sort((a, b) => b[1] - a[1]);
-  console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), diff: +diff.toFixed(3) });
-  console.log("[FaceShape] scores", Object.fromEntries(winner));
-  console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
+  if (debug) {
+    console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), diff: +diff.toFixed(3) });
+    console.log("[FaceShape] scores", Object.fromEntries(winner));
+    console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
+  }
   return winner[0][1] > 0 ? winner[0][0] : "Oval";
 }
 
@@ -342,7 +342,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
       }
 
       if (measureBuf.current.length >= 15) {
-        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current)));
+        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current))); // live display, no log
       }
 
       // Time delta — capped at 100ms to avoid huge jumps after tab switch
@@ -369,7 +369,7 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
               const count = next.filter(Boolean).length;
               setCoveredCount(count);
               if (count >= MIN_COVERED && measureBuf.current.length >= 15) {
-                const shape = classifyFromAvg(avgBuffer(measureBuf.current));
+                const shape = classifyFromAvg(avgBuffer(measureBuf.current), true); // final, log it
                 setFaceShape(shape);
                 doCapture(shape);
               }
