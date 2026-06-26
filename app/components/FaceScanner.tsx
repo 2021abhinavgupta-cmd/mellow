@@ -156,7 +156,6 @@ const N_SEGS           = 8;
 const SEG_REQUIRED_MS  = 1400; // 1.4s dwell per segment — device-framerate independent
 const INIT_REQUIRED_MS = 3000; // 3s frontal hold before rotation phase
 const MIN_COVERED      = 7;    // 7/8 segments = near-full circle required
-const TICK_COUNT       = 36;   // Face ID-style tick marks
 
 // Map (yaw,pitch) → ring segment 0–7
 // 0=top/frontal, 2=right, 4=bottom, 6=left  (clockwise from top)
@@ -432,226 +431,160 @@ export default function FaceScanner({ onCapture, onClose }: Props) {
     return () => cancelAnimationFrame(raf.current);
   }, [status, detect]);
 
-  // Face ID ring: 36 ticks in 4:3 viewBox, centered on face
-  // viewBox "0 0 4 3" maps to camera aspect ratio exactly
-  const RCX = 2.0, RCY = 1.22;
-  const R_INNER = 0.76, R_OUTER_NORM = 0.85, R_OUTER_CARD = 0.94, R_DOT = 0.805;
 
   return (
-    <div className="fixed inset-0 z-50 bg-brown-dark/90 backdrop-blur-sm flex flex-col items-center justify-center p-2 sm:p-6">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="relative bg-cream rounded-2xl overflow-hidden w-full max-w-2xl shadow-2xl"
+    <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center">
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-5 left-5 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:text-white hover:bg-white/20 transition-colors"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-brown-light/30">
-          <div className="flex items-center gap-2">
-            <span className="font-display text-lg text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-              Face Scan
-            </span>
-            {faceShape && status === "scanning" && (
-              <span className="font-sans text-xs text-brown-mid">· {faceShape}</span>
-            )}
-          </div>
-          <button onClick={onClose} className="text-brown-mid hover:text-brown-dark transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        <X className="w-4 h-4" />
+      </button>
 
-        {/* Camera */}
-        <div className="relative bg-black" style={{ aspectRatio: "4/3" }}>
-          <video ref={videoRef} playsInline muted
-            className="w-full h-full object-cover" style={{ transform: "scaleX(-1)" }} />
-          <canvas ref={canvasRef}
-            className="absolute inset-0 w-full h-full pointer-events-none" style={{ transform: "scaleX(-1)" }} />
+      {/* Circle + Ring wrapper — always in DOM so videoRef stays mounted */}
+      <div
+        className="relative flex-shrink-0"
+        style={{ width: "calc(min(72vw, 340px) + 32px)", height: "calc(min(72vw, 340px) + 32px)" }}
+      >
+        {/* Circular video */}
+        <div className="absolute rounded-full overflow-hidden bg-black" style={{ inset: 16 }}>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+            style={{ transform: "scaleX(-1)" }}
+          />
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full pointer-events-none"
+            style={{ transform: "scaleX(-1)" }}
+          />
 
-          {/* Dark vignette for Face ID feel */}
-          <div className="absolute inset-0 pointer-events-none"
-            style={{ background: "radial-gradient(ellipse 55% 70% at 50% 42%, transparent 40%, rgba(0,0,0,0.55) 100%)" }} />
-
-          {/* Face ID tick ring — SVG in 4:3 viewBox */}
-          {status === "scanning" && (
-            <svg
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              viewBox="0 0 4 3"
-              preserveAspectRatio="xMidYMid meet"
-            >
-              {/* Dashed oval guide (face positioning) */}
-              <ellipse cx={RCX} cy={RCY} rx={0.50} ry={0.65}
-                fill="none"
-                stroke={tooClose ? "rgba(255,140,0,0.4)" : "rgba(255,255,255,0.12)"}
-                strokeWidth="0.015"
-                strokeDasharray="0.06 0.03"
-              />
-
-              {/* 36 Face ID tick marks */}
-              {Array.from({ length: TICK_COUNT }, (_, i) => {
-                const angle     = (i / TICK_COUNT) * 2 * Math.PI - Math.PI / 2;
-                const isCard    = i % 9 === 0;
-                const r2        = isCard ? R_OUTER_CARD : R_OUTER_NORM;
-                const seg       = Math.floor(i / (TICK_COUNT / N_SEGS));
-                const x1 = RCX + R_INNER  * Math.cos(angle);
-                const y1 = RCY + R_INNER  * Math.sin(angle);
-                const x2 = RCX + r2       * Math.cos(angle);
-                const y2 = RCY + r2       * Math.sin(angle);
-                return (
-                  <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-                    stroke={covered[seg] ? "#C9A882" : "rgba(255,255,255,0.22)"}
-                    strokeWidth={isCard ? "0.040" : "0.022"}
-                    strokeLinecap="round"
-                    style={{ transition: "stroke 0.5s ease" }}
-                  />
-                );
-              })}
-
-              {/* Segment marker dots at ring */}
-              {Array.from({ length: N_SEGS }, (_, i) => {
-                const angle = (i / N_SEGS) * 2 * Math.PI - Math.PI / 2;
-                const mx = RCX + (R_OUTER_CARD + 0.04) * Math.cos(angle);
-                const my = RCY + (R_OUTER_CARD + 0.04) * Math.sin(angle);
-                return <circle key={i} cx={mx} cy={my} r={0.025}
-                  fill={i < coveredCount ? "#8B6347" : "rgba(255,255,255,0.15)"}
-                  style={{ transition: "fill 0.4s ease" }} />;
-              })}
-
-              {/* Current head-position dot on ring */}
-              {dotAngle !== null && faceInView && (
-                <motion.circle
-                  cx={RCX + R_DOT * Math.cos(dotAngle)}
-                  cy={RCY + R_DOT * Math.sin(dotAngle)}
-                  r={0.055}
-                  fill="#C9A882"
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
-                  style={{ filter: "drop-shadow(0 0 0.04px #C9A882)" }}
-                />
-              )}
-
-              {/* Init phase fill arc */}
-              {phase === "init" && faceInView && initPct > 0 && (
-                <circle
-                  cx={RCX} cy={RCY}
-                  r={R_OUTER_CARD + 0.02}
-                  fill="none"
-                  stroke="#C9A882"
-                  strokeWidth="0.025"
-                  strokeLinecap="round"
-                  pathLength={100}
-                  strokeDasharray={100}
-                  strokeDashoffset={100 - initPct * 100}
-                  transform={`rotate(-90 ${RCX} ${RCY})`}
-                  style={{ transition: "stroke-dashoffset 0.1s ease" }}
-                />
-              )}
-            </svg>
+          {/* Positioning guide — dashed circle when no face detected */}
+          {status === "scanning" && !faceInView && (
+            <div className="absolute inset-[12%] rounded-full border border-dashed border-white/25 pointer-events-none" />
           )}
 
-          {/* Loading */}
+          {/* Loading overlay */}
           {status === "loading" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream/90 gap-3">
-              <div className="w-8 h-8 border-2 border-brown-light border-t-brown-dark rounded-full animate-spin" />
-              <p className="font-sans text-[0.6rem] tracking-[0.3em] uppercase text-brown-mid">Loading scanner</p>
+            <div className="absolute inset-0 flex items-center justify-center bg-black">
+              <div className="w-8 h-8 border-2 border-white/20 border-t-white/60 rounded-full animate-spin" />
             </div>
           )}
 
-          {/* Done */}
-          {status === "done" && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-cream/95 gap-2">
-              <p className="font-display text-3xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-                {faceShape}
-              </p>
-              <p className="font-sans text-[0.6rem] tracking-[0.35em] uppercase text-brown-mid">face shape detected</p>
-              {skinToneResult && (
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="w-6 h-6 rounded-full border border-black/10 flex-shrink-0"
-                    style={{ backgroundColor: skinToneResult.hex }} />
-                  <div className="text-left">
-                    <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-brown-mid">
-                      {skinToneResult.hex} · Fitzpatrick {["","I","II","III","IV","V","VI"][skinToneResult.fitzpatrick]}
-                    </p>
-                    <p className="font-sans text-[0.58rem] text-brown-mid/70">{skinToneResult.label.split("(")[0].trim()}</p>
-                  </div>
-                </div>
-              )}
-            </motion.div>
-          )}
-
-          {/* Error */}
+          {/* Error overlay */}
           {status === "error" && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-cream/95 p-6 text-center gap-3">
-              <p className="font-sans text-sm text-brown-dark">Camera access denied or unavailable.</p>
-              <button onClick={onClose} className="font-sans text-xs text-brown-mid underline underline-offset-2">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black p-6 text-center gap-3">
+              <p className="font-sans text-sm text-white">Camera access denied or unavailable.</p>
+              <button onClick={onClose} className="font-sans text-xs text-white/50 underline underline-offset-2">
                 Upload a photo instead
               </button>
             </div>
           )}
+
+          {/* Done overlay */}
+          {status === "done" && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80"
+            >
+              <p className="font-display text-4xl text-white" style={{ fontStyle: "italic", fontWeight: 300 }}>
+                {faceShape}
+              </p>
+              <p className="font-sans text-[0.55rem] tracking-[0.35em] uppercase text-white/50 mt-1">
+                face shape detected
+              </p>
+              {skinToneResult && (
+                <div className="flex items-center gap-2 mt-3">
+                  <div
+                    className="w-5 h-5 rounded-full border border-white/20 flex-shrink-0"
+                    style={{ backgroundColor: skinToneResult.hex }}
+                  />
+                  <p className="font-sans text-[0.55rem] tracking-[0.2em] uppercase text-white/50">
+                    {skinToneResult.hex}
+                  </p>
+                </div>
+              )}
+            </motion.div>
+          )}
         </div>
 
-        {/* Controls */}
+        {/* Ring SVG — only during scan */}
         {status === "scanning" && (
-          <div className="px-5 py-4 space-y-3">
-            {/* 8 segment indicator dots */}
-            <div className="flex items-center justify-center gap-1.5">
-              {Array.from({ length: N_SEGS }, (_, i) => (
-                <motion.div key={i}
-                  animate={{
-                    width: i === getSegment(yawRef.current, pitchRef.current) && phase === "scan" ? 20 : 8,
-                    backgroundColor: covered[i] ? "#4A3728" : "#C9A882",
-                    opacity: covered[i] ? 1 : 0.35,
-                  }}
-                  transition={{ duration: 0.3 }}
-                  className="h-2 rounded-full"
+          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+            {/* 40 tick dashes around the circle */}
+            {Array.from({ length: 40 }, (_, i) => {
+              const angle = (i / 40) * 2 * Math.PI - Math.PI / 2;
+              const seg = Math.floor((i / 40) * N_SEGS);
+              const isGreen = phase === "scan" && covered[seg];
+              return (
+                <line
+                  key={i}
+                  x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
+                  x2={50 + 49 * Math.cos(angle)} y2={50 + 49 * Math.sin(angle)}
+                  stroke={isGreen ? "#22c55e" : "rgba(255,255,255,0.22)"}
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  style={{ transition: "stroke 0.4s ease" }}
                 />
-              ))}
-            </div>
+              );
+            })}
 
-            {/* Instruction */}
-            <AnimatePresence mode="wait">
-              <motion.div key={`${phase}-${faceInView}-${tooClose}`}
-                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}
-                className="text-center"
-              >
-                <p className="font-display text-xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-                  {tooClose
-                    ? "Move back a little"
-                    : !faceInView
-                    ? "Position your face"
-                    : phase === "init"
-                    ? "Look straight ahead"
-                    : "Move your head in a circle"
-                  }
-                </p>
-                <p className="font-sans text-xs text-brown-mid mt-1">
-                  {coverageHint(covered, faceInView, tooClose)}
-                </p>
-              </motion.div>
-            </AnimatePresence>
-
-            {/* Overall progress bar */}
-            <div className="w-full bg-brown-light/20 rounded-full h-0.5 overflow-hidden">
-              <motion.div
-                className="bg-brown-dark h-0.5 rounded-full"
-                animate={{ width: `${(coveredCount / N_SEGS) * 100}%` }}
-                transition={{ duration: 0.2 }}
+            {/* Init phase: green arc fills as user holds frontal */}
+            {phase === "init" && faceInView && !tooClose && initPct > 0 && (
+              <circle
+                cx={50} cy={50} r={47}
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                pathLength={100}
+                strokeDasharray={100}
+                strokeDashoffset={100 - initPct * 100}
+                transform="rotate(-90 50 50)"
+                style={{ transition: "stroke-dashoffset 0.12s ease" }}
               />
-            </div>
-
-            {/* Manual capture */}
-            {coveredCount >= MIN_COVERED && faceShape && (
-              <button onClick={() => doCapture(faceShape)}
-                className="w-full border border-brown-light text-brown-dark py-2 rounded-xl font-sans text-xs tracking-[0.2em] uppercase hover:bg-brown-light/20 transition-colors">
-                Done · {faceShape} Face
-              </button>
             )}
-          </div>
+          </svg>
         )}
-      </motion.div>
+      </div>
 
-      <p className="font-sans text-[0.6rem] text-cream/40 mt-4 tracking-wide text-center">
+      {/* Instruction text */}
+      {status === "scanning" && (
+        <div className="mt-10 px-8 text-center max-w-xs">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={`${phase}-${faceInView}-${tooClose}`}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25 }}
+              className="text-white text-lg font-sans font-medium leading-snug"
+            >
+              {tooClose
+                ? "Move back a little"
+                : !faceInView
+                ? "Position your face within the frame"
+                : phase === "init"
+                ? "Look straight ahead"
+                : "Move your head slowly to complete the circle"}
+            </motion.p>
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Loading text */}
+      {status === "loading" && (
+        <p className="mt-8 font-sans text-[0.6rem] text-white/30 tracking-[0.3em] uppercase">
+          Loading scanner
+        </p>
+      )}
+
+      {/* Privacy note */}
+      <p className="absolute bottom-6 font-sans text-[0.58rem] text-white/20 tracking-wide text-center px-8">
         Camera stays on your device — nothing uploaded during scanning
       </p>
     </div>
