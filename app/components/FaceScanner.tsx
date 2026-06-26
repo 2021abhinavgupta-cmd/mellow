@@ -26,7 +26,7 @@ const WIRE_NOSE   = [168, 6, 197, 5, 4, 1];
 const WIRE_LIPS   = [61, 37, 0, 267, 291, 321, 17, 84, 61];
 
 // ── Measurement ────────────────────────────────────────────────────────────
-interface M { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number }
+interface M { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number; chinW: number; jawAngle: number }
 interface Lm { x: number; y: number; z: number }
 
 function d2px(a: Lm, b: Lm, W: number, H: number) {
@@ -34,33 +34,57 @@ function d2px(a: Lm, b: Lm, W: number, H: number) {
   return Math.sqrt(((a.x - b.x) * W) ** 2 + ((a.y - b.y) * H) ** 2);
 }
 
+// Angle at vertex B formed by points A-B-C, in pixel space
+function anglePx(a: Lm, b: Lm, c: Lm, W: number, H: number): number {
+  const ax = (a.x - b.x) * W, ay = (a.y - b.y) * H;
+  const cx = (c.x - b.x) * W, cy = (c.y - b.y) * H;
+  const mag = Math.sqrt((ax * ax + ay * ay) * (cx * cx + cy * cy));
+  return mag > 0 ? Math.acos(Math.max(-1, Math.min(1, (ax * cx + ay * cy) / mag))) : Math.PI;
+}
+
+// Avg jaw-corner angle at gonion landmarks (lm172 left, lm397 right)
+// Square jaw ≈ <1.80 rad; Round jaw ≈ >2.05 rad
+function jawCornerAngle(lm: Lm[], W: number, H: number): number {
+  const L = anglePx(lm[136], lm[172], lm[58],  W, H);
+  const R = anglePx(lm[379], lm[397], lm[288], W, H);
+  return (L + R) / 2;
+}
+
 function measure(lm: Lm[], W: number, H: number): M {
   return {
-    foreW:   d2px(lm[54],  lm[284], W, H),
-    eyeW:    d2px(lm[33],  lm[263], W, H),
-    cheekW:  d2px(lm[234], lm[454], W, H),
-    jawW:    d2px(lm[172], lm[397], W, H),
-    faceLen: d2px(lm[10],  lm[152], W, H),
+    foreW:    d2px(lm[54],  lm[284], W, H),
+    eyeW:     d2px(lm[33],  lm[263], W, H),
+    cheekW:   d2px(lm[234], lm[454], W, H),
+    jawW:     d2px(lm[172], lm[397], W, H),
+    faceLen:  d2px(lm[10],  lm[152], W, H),
+    chinW:    d2px(lm[148], lm[377], W, H),  // narrow chin base
+    jawAngle: jawCornerAngle(lm, W, H),
   };
 }
 
 function avgBuffer(buf: M[]): M {
   const n = buf.length;
   return {
-    foreW:   buf.reduce((s, m) => s + m.foreW,   0) / n,
-    eyeW:    buf.reduce((s, m) => s + m.eyeW,    0) / n,
-    cheekW:  buf.reduce((s, m) => s + m.cheekW,  0) / n,
-    jawW:    buf.reduce((s, m) => s + m.jawW,    0) / n,
-    faceLen: buf.reduce((s, m) => s + m.faceLen, 0) / n,
+    foreW:    buf.reduce((s, m) => s + m.foreW,    0) / n,
+    eyeW:     buf.reduce((s, m) => s + m.eyeW,     0) / n,
+    cheekW:   buf.reduce((s, m) => s + m.cheekW,   0) / n,
+    jawW:     buf.reduce((s, m) => s + m.jawW,     0) / n,
+    faceLen:  buf.reduce((s, m) => s + m.faceLen,  0) / n,
+    chinW:    buf.reduce((s, m) => s + m.chinW,    0) / n,
+    jawAngle: buf.reduce((s, m) => s + m.jawAngle, 0) / n,
   };
 }
 
 function classifyFromAvg(avg: M, debug = false): string {
-  const { foreW, cheekW, jawW, faceLen } = avg;
+  const { foreW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
   const lenR  = faceLen / cheekW;
   const jawR  = jawW    / cheekW;
   const foreR = foreW   / cheekW;
+  const chinR = chinW   / cheekW;
   const diff  = foreR   - jawR;
+  // jawAngle: low (<1.80 rad, ~103°) = angular jaw; high (>2.05 rad, ~118°) = soft jaw
+  const isAngular = jawAngle < 1.80;
+  const isSoft    = jawAngle > 2.05;
 
   const scores: Record<string, number> = {
     Long: 0, Rectangle: 0, Diamond: 0, Triangle: 0, "Inverted Triangle": 0,
@@ -90,6 +114,17 @@ function classifyFromAvg(avg: M, debug = false): string {
   else if (diff > 0.06)  scores.Heart    += 3;
   if (diff < -0.10)      scores.Triangle += 6;
   else if (diff < -0.05) scores.Triangle += 3;
+
+  // Jaw angularity — angular confirms Square/Rectangle; soft confirms Round/Oval
+  if (isAngular && Math.abs(diff) < 0.08 && lenR < 1.32) scores.Square     += 4;
+  else if (isAngular)                                     scores.Square     += 2;
+  if (isAngular && lenR > 1.28)                           scores.Rectangle  += 3;
+  if (isSoft && lenR < 1.20)                              scores.Round      += 3;
+  else if (isSoft)                                        scores.Round      += 1;
+
+  // Chin narrowness — strong Heart discriminator (separates Heart from Oval)
+  if (chinR < 0.44 && foreR > 0.86)      scores.Heart += 4;
+  else if (chinR < 0.48 && foreR > 0.82) scores.Heart += 2;
 
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
   if (foreR > 0.94 && jawR < 0.72)      scores["Inverted Triangle"] += 8;
@@ -128,7 +163,7 @@ function classifyFromAvg(avg: M, debug = false): string {
 
   const winner = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   if (debug) {
-    console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), diff: +diff.toFixed(3) });
+    console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), chinR: +chinR.toFixed(3), diff: +diff.toFixed(3), jawAngleDeg: +(jawAngle * 180 / Math.PI).toFixed(1), isAngular, isSoft });
     console.log("[FaceShape] scores", Object.fromEntries(winner));
     console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
   }
