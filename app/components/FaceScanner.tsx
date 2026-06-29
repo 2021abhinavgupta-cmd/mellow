@@ -377,24 +377,39 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, W, H);
 
+    // iPhone fallback: if camera delivered landscape video (W > H) while device is portrait,
+    // landmarks are rotated 90° — correct by rotating them before measurement.
+    // Detection: video is landscape but viewport is portrait.
+    const devicePortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+    const videoRotated   = W > H && devicePortrait;
+    // 90° CCW correction (iPhone front camera portrait): (x,y) → (y, 1−x), effective dims swap
+    const mW = videoRotated ? H : W;
+    const mH = videoRotated ? W : H;
+    function rotateLm(lm: { x: number; y: number; z: number }[]) {
+      return videoRotated ? lm.map(p => ({ x: p.y, y: 1 - p.x, z: p.z })) : lm;
+    }
+
     let results;
     try { results = lmkr.detectForVideo(video, performance.now()); }
     catch { raf.current = requestAnimationFrame(detect); return; }
 
     if (results.faceLandmarks.length > 0) {
-      const lm = results.faceLandmarks[0];
+      const lmRaw = results.faceLandmarks[0];
+      const lm    = rotateLm(lmRaw);  // identity if not rotated; corrected landmarks for iPhone portrait
       setFaceInView(true);
-      drawFace(ctx, lm, W, H);
+      drawFace(ctx, lmRaw, W, H);     // draw on canvas using raw coords (canvas is in video space)
 
-      // Face size check — cheekW > 52% of frame width = too close
+      // Face size check — cheekW > 52% of effective frame width = too close
       const cheekWnorm = Math.abs(lm[454].x - lm[234].x);
       const close = cheekWnorm > 0.52;
       setTooClose(close);
 
       // Pose: prefer transformation matrix (true 3D), fall back to landmarks
+      // If video is rotated, swap yaw/pitch so frontal detection works correctly
       let pose: { yaw: number; pitch: number };
       if (results.facialTransformationMatrixes?.length > 0) {
-        pose = poseFromMatrix(results.facialTransformationMatrixes[0].data);
+        const p = poseFromMatrix(results.facialTransformationMatrixes[0].data);
+        pose = videoRotated ? { yaw: p.pitch, pitch: -p.yaw } : p;
       } else {
         pose = poseFromLandmarks(lm);
       }
@@ -410,7 +425,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       // Accumulate measurements ONLY when frontal — side-view data corrupts ratios
       // Weight by frontality: frames near yaw=0/pitch=0 count more than edge-of-window frames
       if (isFrontal && !close) {
-        const m = measure(lm, W, H);
+        const m = measure(lm, mW, mH);  // use corrected landmarks + effective dims
         m.weight = Math.max(0.1, (1 - Math.abs(yaw) / 0.15) * (1 - Math.abs(pitch) / 0.18));
         measureBuf.current.push(m);
         if (measureBuf.current.length > 400) measureBuf.current.shift();
@@ -426,8 +441,9 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       }
 
       // Sample skin tone from cheeks during frontal hold (accumulate LAB values)
+      // Use raw (unrotated) landmarks — sampleSkinToneFromVideo maps into raw video pixel space
       if (isFrontal && !close && skinLabBuf.current.length < 180) {
-        const sample = sampleSkinToneFromVideo(video, lm);
+        const sample = sampleSkinToneFromVideo(video, lmRaw);
         if (sample) skinLabBuf.current.push(sample);
       }
 
@@ -501,7 +517,9 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         if (cancelled) { lmkr.close(); return; }
         landmarker.current = lmkr;
         const ms = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+          // Portrait-preferred: iPhone front camera delivers landscape internally;
+          // requesting height > width signals portrait orientation, fixing sideways MediaPipe input
+          video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 } },
         });
         if (cancelled) { ms.getTracks().forEach((t) => t.stop()); return; }
         stream.current = ms;
