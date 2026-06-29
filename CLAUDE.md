@@ -319,7 +319,7 @@ Measurements accumulate **only when face is frontal** (`|yaw| < 0.15 && |pitch| 
 - `m.weight` = `(1 − |yaw|/0.15) × (1 − |pitch|/0.18)` — pose weight stored per frame
 - `avgBuffer()` uses **weighted trimmed mean** — drops top+bottom 15% extreme frames, then weights remaining by pose quality. Frontal frames count more; edge-of-window frames count less.
 
-Face shape classifier: Oval is a **last resort** — only scores when no other shape reaches ≥ 5 points. Other shapes use strong discriminators (jaw/cheek ratio, forehead-jaw differential, length ratio).
+Face shape classifier: Oval scores **proactively** when `lenR 1.18–1.36` and `|diff| < 0.11` (+5 pts), then also as last resort when no other shape reaches ≥ 5 points.
 
 **MediaPipe landmark compression**: Real-world facial ratios compress ~20% in MediaPipe coordinates because `cheekW` (lm234→lm454) measures near-ear width (wider than bizygomatic), and `faceLen` (lm10→lm152) starts at mid-forehead not hairline (shorter). Result: real 1.5:1 oval → ~1.20 in landmarks. All thresholds are calibrated for MediaPipe space, not tape-measure space.
 
@@ -327,13 +327,15 @@ Face shape classifier: Oval is a **last resort** — only scores when no other s
 
 | Shape | Key ratios | Prevalence |
 |---|---|---|
-| Oval | `lenR 1.19–1.32`, forehead slightly > jaw, cheekbones widest | ~25–30% |
-| Heart | `jawR < 0.70`, `foreR > 0.89`, `diff > 0.10`, narrow chin | ~10–15% |
+| Oval | `lenR 1.19–1.32`, `|diff| < 0.11`, cheekbones widest | ~25–30% |
+| Heart | `jawR < 0.60`, `foreR > 0.89`, `diff > 0.13`, narrow chin | ~10–15% |
 | Round | `lenR < 1.18`, soft jaw angle | ~15–20% |
 | Square | `|diff| < 0.09`, `jawR > 0.76`, angular jaw | ~15% |
 | Long | `lenR > 1.38` (real > ~1.5:1) | ~10% |
 
-Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.70`), wide forehead (`foreR > 0.89`), forehead-jaw taper (`diff > 0.10`), narrow chin (`chinR < 0.41` female / `< 0.43` male). If ANY is absent, Heart score stays low — prevents false positives.
+Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.60` for +4, `< 0.65` for +2), wide forehead (`foreR > 0.89`), forehead-jaw taper (`diff > 0.13`), narrow chin (`chinR < 0.38` female / `< 0.40` male with `foreR > 0.91`). If ANY is absent, Heart score stays low — prevents false positives.
+
+**Root cause of Heart over-classification**: Anthropometric research shows average face has bitemporal/bizygomatic = 0.82, bigonial/bizygomatic = 0.72 → `diff_real ≈ 0.10`. In MediaPipe space (near-ear cheekW inflates denominator ~15%), average jawR ≈ 0.63 and diff ≈ 0.08. Old thresholds (`jawR < 0.70`, `diff > 0.10`) caught the average face. Tighter thresholds + Oval proactive scoring fixed this.
 
 `onCapture(imageDataUrl, faceShape)` — skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` to localStorage before firing callback; callers read it from there.
 
@@ -343,7 +345,7 @@ Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.70`), w
 
 `classifyFromAvg(avg, debug, gender)` — 3rd param required at both call sites (live display + final capture). Defaults to `"female"` but must be passed explicitly.
 
-Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds: male `0.43/0.46`, female `0.41/0.44`. Round requires `lenR < 1.15` for males vs 1.20 for females. Research confirms males have wider mandible (higher jawR → more Square/Rectangle tendency); females softer jaw (more Oval/Heart tendency).
+Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds: male `0.40/0.43`, female `0.38/0.41`. Round requires `lenR < 1.15` for males vs 1.20 for females. Research confirms males have wider mandible (higher jawR → more Square/Rectangle tendency); females softer jaw (more Oval/Heart tendency).
 
 Classifier outputs 9 shapes: `Oval`, `Round`, `Square`, `Rectangle`, `Long`, `Heart`, `Diamond`, `Triangle`, `Inverted Triangle`.
 
@@ -351,9 +353,9 @@ Classifier outputs 9 shapes: `Oval`, `Round`, `Square`, `Rectangle`, `Long`, `He
 
 **Additional derived ratios** (computed inside `classifyFromAvg`, not in `M` interface):
 - `eyeR = eyeW / cheekW` — eye width relative to face; Diamond faces have wide eyes vs narrow face (high eyeR with low foreR/jawR)
-- `taper = jawR − chinR` — jaw-to-chin taper; Heart has low taper (both jaw + chin narrow ~0.28); Square has low-moderate taper with wide jaw (~0.30-0.34); Round/Long have higher taper (~0.36-0.38)
+- `taper = jawR − chinR` — jaw-to-chin taper; Square has low-moderate taper with wide jaw (~0.30-0.34). No longer used for Heart scoring (caused false positives for Oval faces).
 
-`diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.07–0.10`. Never lower the Heart `diff` threshold below `0.10` — anything below `0.08` over-classifies Heart for majority of faces.
+`diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.08` in MediaPipe space. Heart threshold must stay at `> 0.13` minimum — below this catches majority of Oval faces. Never lower below `0.13`.
 
 UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(201,168,130,0.45)` (brown-light at 45% opacity). Never use black/white/green — those are Apple Face ID colors, not Mellow brand.
 

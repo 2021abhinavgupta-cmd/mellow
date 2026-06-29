@@ -134,8 +134,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Jaw/cheek ratio
   if (jawR > 0.86)       scores.Triangle += 6;
   else if (jawR > 0.82)  { scores.Triangle += 2; scores.Square += 2; }
-  if (jawR < 0.70)       { scores.Heart += 4; scores.Diamond += 2; }  // research: heart jaw narrow relative to cheekbones
-  else if (jawR < 0.74)  scores.Heart += 2;
+  // Heart jaw threshold tightened: avg Oval jawR ≈ 0.63 (bigonial 0.72 × bizy ÷ near-ear cheekW 1.15×)
+  // Heart needs jaw notably below average — < 0.60 is truly narrow
+  if (jawR < 0.60)       { scores.Heart += 4; scores.Diamond += 2; }
+  else if (jawR < 0.65)  scores.Heart += 2;
 
   // Forehead/cheek ratio — Heart needs genuinely wide forehead (not just slightly wider)
   if (foreR > 0.93)      scores.Heart   += 4;
@@ -143,10 +145,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (foreR < 0.79)      scores.Diamond += 4;
   else if (foreR < 0.84) scores.Diamond += 2;
 
-  // Forehead-jaw differential — research: Heart forehead 10–15% wider than jaw (real-world diff 0.10–0.15)
-  // MediaPipe landmarks compress ~20% (near-ear cheekW is wider), so threshold ~0.08–0.12 in landmark space
-  if (diff > 0.15)       scores.Heart    += 6;
-  else if (diff > 0.10)  scores.Heart    += 3;
+  // Forehead-jaw differential — average face diff ≈ 0.08 in MediaPipe space (bitemporal 0.82 − bigonial 0.72 = 0.10 real, ÷1.15 cheekW inflation)
+  // Heart needs diff well above average — raise thresholds to avoid catching normal variation
+  if (diff > 0.17)       scores.Heart    += 6;
+  else if (diff > 0.13)  scores.Heart    += 3;
   if (diff < -0.10)      scores.Triangle += 6;
   else if (diff < -0.05) scores.Triangle += 3;
 
@@ -157,14 +159,13 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (isSoft && lenR < (gender === "male" ? 1.15 : 1.20)) scores.Round      += 3;
   else if (isSoft)                                        scores.Round      += 1;
 
-  // Chin narrowness — research: narrow pointed chin is key Heart feature; calibrated from anthropometric data
-  const heartChinA = gender === "male" ? 0.43 : 0.41;
-  const heartChinB = gender === "male" ? 0.46 : 0.44;
-  if (chinR < heartChinA && foreR > 0.89)      scores.Heart += 4;
-  else if (chinR < heartChinB && foreR > 0.85) scores.Heart += 2;
+  // Chin narrowness — require foreR > 0.91 (truly wide forehead) to avoid false Heart on typical narrow chins
+  const heartChinA = gender === "male" ? 0.40 : 0.38;
+  const heartChinB = gender === "male" ? 0.43 : 0.41;
+  if (chinR < heartChinA && foreR > 0.91)      scores.Heart += 4;
+  else if (chinR < heartChinB && foreR > 0.87) scores.Heart += 2;
 
-  // Jaw-to-chin taper: Heart has uniformly narrow face (low taper); Square has wide jaw with less-narrow chin
-  if (taper < 0.28 && jawR < 0.74) scores.Heart  += 2;  // both jaw + chin narrow → confirms Heart
+  // Taper scoring — removed Heart contribution (was causing false positives for average Oval faces)
   if (taper < 0.30 && jawR > 0.78) scores.Square += 2;  // wide jaw, chin not much narrower → Square-like
 
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
@@ -194,15 +195,20 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Long bonus: elongated + tapered (narrow) jaw, not square
   if (lenR > 1.42 && jawR < 0.78) scores.Long += 3;
 
-  // Oval only when no other shape scores ≥ 5 (true last resort)
+  // Oval proactive — reward balanced proportions regardless of other scores
+  // A small diff (forehead ≈ jaw) with moderate lenR is the strongest Oval signal
+  if (lenR >= 1.18 && lenR <= 1.36 && Math.abs(diff) < 0.11) scores.Oval += 5;
+  if (Math.abs(diff) < 0.07) scores.Oval += 2;   // very balanced bonus
+
+  // Oval last resort — additional points only when no strong alternative
   const maxOther = Math.max(
     scores.Long, scores.Rectangle, scores.Diamond, scores.Triangle,
     scores["Inverted Triangle"], scores.Heart, scores.Round, scores.Square
   );
   if (maxOther < 5) {
     if (lenR >= 1.19 && lenR <= 1.32) scores.Oval += 3;
-    if (jawR >= 0.74 && jawR <= 0.84) scores.Oval += 2;
-    if (foreR >= 0.82 && foreR <= 0.91) scores.Oval += 2;
+    if (jawR >= 0.58 && jawR <= 0.84) scores.Oval += 2;
+    if (foreR >= 0.70 && foreR <= 0.91) scores.Oval += 2;
     if (Math.abs(diff) < 0.07) scores.Oval += 1;
   }
 
