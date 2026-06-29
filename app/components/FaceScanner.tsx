@@ -162,7 +162,7 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   const heartChinA = gender === "male" ? 0.40 : 0.38;
   const heartChinB = gender === "male" ? 0.43 : 0.41;
   if (chinR < heartChinA && foreR > 0.91)      scores.Heart += 4;
-  else if (chinR < heartChinB && foreR > 0.87) scores.Heart += 2;
+  else if (chinR < heartChinB && foreR > 0.89) scores.Heart += 2;
 
   // Taper scoring — removed Heart contribution (was causing false positives for average Oval faces)
   if (taper < 0.30 && jawR > 0.78) scores.Square += 2;  // wide jaw, chin not much narrower → Square-like
@@ -175,10 +175,11 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Rectangle: long + wide angular jaw (not tapered like Long, not short like Square)
   if (lenR > 1.30 && jawR > 0.80 && Math.abs(diff) < 0.10)      scores.Rectangle += 8;
   else if (lenR > 1.24 && jawR > 0.77 && Math.abs(diff) < 0.12) scores.Rectangle += 5;
-  else if (lenR > 1.18 && jawR > 0.75)                           scores.Rectangle += 3;
+  else if (lenR > 1.22 && jawR > 0.78 && isAngular)              scores.Rectangle += 3;
 
-  // Square: jaw ≈ forehead, both wide, NOT long (lenR < 1.30 to separate from Rectangle)
-  if (Math.abs(diff) < 0.05 && jawR > 0.80 && foreR > 0.82 && lenR < 1.30) scores.Square += 7;
+  // Square: jaw ≈ forehead, both wide, NOT long — angular jaw required for full score
+  // Soft jaw gets reduced score (avoids misclassifying Oval/Round with equal proportions)
+  if (Math.abs(diff) < 0.05 && jawR > 0.80 && foreR > 0.82 && lenR < 1.30) scores.Square += isAngular ? 7 : 4;
   else if (Math.abs(diff) < 0.09 && jawR > 0.76)                             scores.Square += 3;
 
   // Diamond: narrow at both forehead and jaw vs cheekbones
@@ -194,9 +195,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Long bonus: elongated face with moderate jaw (lower threshold to match MP compression)
   if (lenR > 1.34 && jawR < 0.80) scores.Long += 3;
 
-  // Oval proactive — reward balanced proportions regardless of other scores
-  // A small diff (forehead ≈ jaw) with moderate lenR is the strongest Oval signal
-  if (lenR >= 1.18 && lenR <= 1.36 && Math.abs(diff) < 0.11) scores.Oval += 5;
+  // Oval proactive — tiered by lenR to prevent tie with Long (+5 at lenR 1.24-1.32)
+  // Core Oval zone (lenR 1.19–1.24): full +5. Borderline Long zone (1.24–1.32): +3 with tighter diff.
+  if (lenR >= 1.19 && lenR <= 1.24 && Math.abs(diff) < 0.11) scores.Oval += 5;
+  else if (lenR > 1.24 && lenR <= 1.32 && Math.abs(diff) < 0.09) scores.Oval += 3;
   if (Math.abs(diff) < 0.07) scores.Oval += 2;   // very balanced bonus
 
   // Oval last resort — additional points only when no strong alternative
@@ -206,7 +208,7 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   );
   if (maxOther < 5) {
     if (lenR >= 1.19 && lenR <= 1.32) scores.Oval += 3;
-    if (jawR >= 0.58 && jawR <= 0.84) scores.Oval += 2;
+    if (jawR >= 0.63 && jawR <= 0.80) scores.Oval += 2;
     if (foreR >= 0.70 && foreR <= 0.91) scores.Oval += 2;
     if (Math.abs(diff) < 0.07) scores.Oval += 1;
   }
@@ -313,7 +315,8 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const captured    = useRef(false);
   const measureBuf  = useRef<M[]>([]);
   const frontalImg  = useRef<string | null>(null);
-  const skinLabBuf  = useRef<{ L: number; a: number; b: number }[]>([]);
+  const skinLabBuf     = useRef<{ L: number; a: number; b: number }[]>([]);
+  const bestCenterScore = useRef(Infinity);
   const initTimeMs  = useRef(0);
   const segTimeMs   = useRef<number[]>(Array(N_SEGS).fill(0));
   const lastDetectT = useRef(0);
@@ -431,8 +434,11 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         if (measureBuf.current.length > 400) measureBuf.current.shift();
       }
 
-      // Save best frontal frame for GPT-4o (90% quality, non-mirrored)
-      if (isFrontal && !frontalImg.current && !close) {
+      // Save best frontal frame for GPT-4o — replace whenever a more centered frame is found
+      // Most-centered (lowest yaw+pitch sum) gives GPT-4o the clearest face photo
+      const centerScore = Math.abs(yaw) + Math.abs(pitch);
+      if (isFrontal && !close && centerScore < bestCenterScore.current) {
+        bestCenterScore.current = centerScore;
         const cap = document.createElement("canvas");
         cap.width = W; cap.height = H;
         const c = cap.getContext("2d")!;
