@@ -26,7 +26,7 @@ const WIRE_NOSE   = [168, 6, 197, 5, 4, 1];
 const WIRE_LIPS   = [61, 37, 0, 267, 291, 321, 17, 84, 61];
 
 // ── Measurement ────────────────────────────────────────────────────────────
-interface M { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number; chinW: number; jawAngle: number }
+interface M { foreW: number; eyeW: number; cheekW: number; jawW: number; faceLen: number; chinW: number; jawAngle: number; weight: number }
 interface Lm { x: number; y: number; z: number }
 
 function d2px(a: Lm, b: Lm, W: number, H: number) {
@@ -51,37 +51,68 @@ function jawCornerAngle(lm: Lm[], W: number, H: number): number {
 }
 
 function measure(lm: Lm[], W: number, H: number): M {
+  // jaw: average gonion-to-gonion + jaw-body (more stable than single pair)
+  const jawW  = (d2px(lm[172], lm[397], W, H) + d2px(lm[136], lm[379], W, H)) / 2;
+  // chin: average narrowest tip + slightly wider base (more robust than tip alone)
+  const chinW = (d2px(lm[148], lm[377], W, H) + d2px(lm[176], lm[400], W, H)) / 2;
+  // forehead: average upper temple (lm54/284) + lower temple (lm21/251) — two heights more representative than one
+  const foreW = (d2px(lm[54],  lm[284], W, H) + d2px(lm[21],  lm[251], W, H)) / 2;
   return {
-    foreW:    d2px(lm[54],  lm[284], W, H),
+    foreW,
     eyeW:     d2px(lm[33],  lm[263], W, H),
     cheekW:   d2px(lm[234], lm[454], W, H),
-    jawW:     d2px(lm[172], lm[397], W, H),
+    jawW,
     faceLen:  d2px(lm[10],  lm[152], W, H),
-    chinW:    d2px(lm[148], lm[377], W, H),  // narrow chin base
+    chinW,
     jawAngle: jawCornerAngle(lm, W, H),
+    weight:   1,
   };
 }
 
 function avgBuffer(buf: M[]): M {
   const n = buf.length;
+  // Weighted trimmed mean: drop top+bottom 15%, then weight remaining by pose quality (m.weight)
+  if (n >= 6) {
+    const cut = Math.max(1, Math.floor(n * 0.15));
+    const weightedTrim = (vals: number[], ws: number[]) => {
+      const pairs = vals.map((v, i) => ({ v, w: ws[i] })).sort((a, b) => a.v - b.v).slice(cut, n - cut);
+      const totalW = pairs.reduce((s, p) => s + p.w, 0);
+      return totalW > 0 ? pairs.reduce((s, p) => s + p.v * p.w, 0) / totalW : 0;
+    };
+    const ws = buf.map(m => m.weight);
+    return {
+      foreW:    weightedTrim(buf.map(m => m.foreW),    ws),
+      eyeW:     weightedTrim(buf.map(m => m.eyeW),     ws),
+      cheekW:   weightedTrim(buf.map(m => m.cheekW),   ws),
+      jawW:     weightedTrim(buf.map(m => m.jawW),      ws),
+      faceLen:  weightedTrim(buf.map(m => m.faceLen),  ws),
+      chinW:    weightedTrim(buf.map(m => m.chinW),     ws),
+      jawAngle: weightedTrim(buf.map(m => m.jawAngle), ws),
+      weight:   1,
+    };
+  }
+  const sumW = buf.reduce((s, m) => s + m.weight, 0) || 1;
   return {
-    foreW:    buf.reduce((s, m) => s + m.foreW,    0) / n,
-    eyeW:     buf.reduce((s, m) => s + m.eyeW,     0) / n,
-    cheekW:   buf.reduce((s, m) => s + m.cheekW,   0) / n,
-    jawW:     buf.reduce((s, m) => s + m.jawW,     0) / n,
-    faceLen:  buf.reduce((s, m) => s + m.faceLen,  0) / n,
-    chinW:    buf.reduce((s, m) => s + m.chinW,    0) / n,
-    jawAngle: buf.reduce((s, m) => s + m.jawAngle, 0) / n,
+    foreW:    buf.reduce((s, m) => s + m.foreW    * m.weight, 0) / sumW,
+    eyeW:     buf.reduce((s, m) => s + m.eyeW     * m.weight, 0) / sumW,
+    cheekW:   buf.reduce((s, m) => s + m.cheekW   * m.weight, 0) / sumW,
+    jawW:     buf.reduce((s, m) => s + m.jawW     * m.weight, 0) / sumW,
+    faceLen:  buf.reduce((s, m) => s + m.faceLen  * m.weight, 0) / sumW,
+    chinW:    buf.reduce((s, m) => s + m.chinW    * m.weight, 0) / sumW,
+    jawAngle: buf.reduce((s, m) => s + m.jawAngle * m.weight, 0) / sumW,
+    weight:   1,
   };
 }
 
 function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): string {
-  const { foreW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
+  const { foreW, eyeW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
   const lenR  = faceLen / cheekW;
   const jawR  = jawW    / cheekW;
   const foreR = foreW   / cheekW;
   const chinR = chinW   / cheekW;
+  const eyeR  = eyeW    / cheekW;
   const diff  = foreR   - jawR;
+  const taper = jawR    - chinR;   // jaw-to-chin taper: low = both narrow (Heart); moderate = Square; high = Round/Long
   // Males have anatomically more acute gonion angles — require stricter threshold
   // to avoid over-classifying male Oval/Round faces as Square
   const angularThresh = gender === "male" ? 1.72 : 1.80;
@@ -132,6 +163,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (chinR < heartChinA && foreR > 0.89)      scores.Heart += 4;
   else if (chinR < heartChinB && foreR > 0.85) scores.Heart += 2;
 
+  // Jaw-to-chin taper: Heart has uniformly narrow face (low taper); Square has wide jaw with less-narrow chin
+  if (taper < 0.28 && jawR < 0.74) scores.Heart  += 2;  // both jaw + chin narrow → confirms Heart
+  if (taper < 0.30 && jawR > 0.78) scores.Square += 2;  // wide jaw, chin not much narrower → Square-like
+
   // Inverted Triangle: forehead wider than cheekbones AND jaw very narrow
   if (foreR > 0.94 && jawR < 0.72)      scores["Inverted Triangle"] += 8;
   else if (foreR > 0.90 && jawR < 0.76) scores["Inverted Triangle"] += 5;
@@ -148,6 +183,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
 
   // Diamond: narrow at both forehead and jaw vs cheekbones
   if (foreR < 0.79 && jawR < 0.76) scores.Diamond += 4;
+
+  // Eye width ratio — Diamond has wide eyes relative to narrow face (wide mid-face/cheekbones dominant)
+  if (eyeR > 0.68 && foreR < 0.84 && jawR < 0.76) scores.Diamond += 2;
+  else if (eyeR > 0.65 && foreR < 0.87)             scores.Diamond += 1;
 
   // Round bonus: wide + short
   if (jawR > 0.82 && foreR > 0.82 && lenR < 1.18) scores.Round += 3;
@@ -169,7 +208,7 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
 
   const winner = Object.entries(scores).sort((a, b) => b[1] - a[1]);
   if (debug) {
-    console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), chinR: +chinR.toFixed(3), diff: +diff.toFixed(3), jawAngleDeg: +(jawAngle * 180 / Math.PI).toFixed(1), isAngular, isSoft });
+    console.log("[FaceShape] ratios", { lenR: +lenR.toFixed(3), jawR: +jawR.toFixed(3), foreR: +foreR.toFixed(3), chinR: +chinR.toFixed(3), eyeR: +eyeR.toFixed(3), diff: +diff.toFixed(3), taper: +taper.toFixed(3), jawAngleDeg: +(jawAngle * 180 / Math.PI).toFixed(1), isAngular, isSoft });
     console.log("[FaceShape] scores", Object.fromEntries(winner));
     console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
   }
@@ -364,8 +403,11 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       const isFrontal = Math.abs(yaw) < 0.15 && Math.abs(pitch) < 0.18;
 
       // Accumulate measurements ONLY when frontal — side-view data corrupts ratios
+      // Weight by frontality: frames near yaw=0/pitch=0 count more than edge-of-window frames
       if (isFrontal && !close) {
-        measureBuf.current.push(measure(lm, W, H));
+        const m = measure(lm, W, H);
+        m.weight = Math.max(0.1, (1 - Math.abs(yaw) / 0.15) * (1 - Math.abs(pitch) / 0.18));
+        measureBuf.current.push(m);
         if (measureBuf.current.length > 200) measureBuf.current.shift();
       }
 

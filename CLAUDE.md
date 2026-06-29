@@ -312,6 +312,13 @@ Timing is **time-based** (ms), not frame-based — works correctly at 30fps, 60f
 
 Measurements accumulate **only when face is frontal** (`|yaw| < 0.15 && |pitch| < 0.18`) — side-view frames excluded to prevent perspective distortion corrupting ratios. Min 8 frontal samples required before scan can complete.
 
+**Measurement robustness** (all free, no API):
+- `jawW` = average of `lm172↔lm397` (gonion) + `lm136↔lm379` (jaw body) — two parallel pairs, more stable than single
+- `chinW` = average of `lm148↔lm377` (tip) + `lm176↔lm400` (slightly wider base)
+- `foreW` = average of `lm54↔lm284` (upper temple) + `lm21↔lm251` (lower temple) — two heights
+- `m.weight` = `(1 − |yaw|/0.15) × (1 − |pitch|/0.18)` — pose weight stored per frame
+- `avgBuffer()` uses **weighted trimmed mean** — drops top+bottom 15% extreme frames, then weights remaining by pose quality. Frontal frames count more; edge-of-window frames count less.
+
 Face shape classifier: Oval is a **last resort** — only scores when no other shape reaches ≥ 5 points. Other shapes use strong discriminators (jaw/cheek ratio, forehead-jaw differential, length ratio).
 
 **MediaPipe landmark compression**: Real-world facial ratios compress ~20% in MediaPipe coordinates because `cheekW` (lm234→lm454) measures near-ear width (wider than bizygomatic), and `faceLen` (lm10→lm152) starts at mid-forehead not hairline (shorter). Result: real 1.5:1 oval → ~1.20 in landmarks. All thresholds are calibrated for MediaPipe space, not tape-measure space.
@@ -340,7 +347,11 @@ Gender-aware thresholds: males have more acute gonion angles by default, so `isA
 
 Classifier outputs 9 shapes: `Oval`, `Round`, `Square`, `Rectangle`, `Long`, `Heart`, `Diamond`, `Triangle`, `Inverted Triangle`.
 
-`classifyFromAvg(avg, true, gender)` — pass `true` to log ratios + scores to browser console. Use during threshold tuning to see exact `lenR`, `jawR`, `foreR`, `chinR`, `diff` for a real face.
+`classifyFromAvg(avg, true, gender)` — pass `true` to log ratios + scores to browser console. Logs `lenR`, `jawR`, `foreR`, `chinR`, `eyeR`, `diff`, `taper`, `jawAngleDeg`.
+
+**Additional derived ratios** (computed inside `classifyFromAvg`, not in `M` interface):
+- `eyeR = eyeW / cheekW` — eye width relative to face; Diamond faces have wide eyes vs narrow face (high eyeR with low foreR/jawR)
+- `taper = jawR − chinR` — jaw-to-chin taper; Heart has low taper (both jaw + chin narrow ~0.28); Square has low-moderate taper with wide jaw (~0.30-0.34); Round/Long have higher taper (~0.36-0.38)
 
 `diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.07–0.10`. Never lower the Heart `diff` threshold below `0.10` — anything below `0.08` over-classifies Heart for majority of faces.
 
