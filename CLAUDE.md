@@ -312,6 +312,15 @@ Timing is **time-based** (ms), not frame-based — works correctly at 30fps, 60f
 
 Measurements accumulate **only when face is frontal** (`|yaw| < 0.15 && |pitch| < 0.18`) — side-view frames excluded to prevent perspective distortion corrupting ratios. Min 8 frontal samples required before scan can complete.
 
+**iPhone portrait fix (commit cc96b2f)**: iPhone front camera sensor is physically landscape. Safari delivers landscape video (W > H) even in portrait mode. MediaPipe sees a sideways face. Pose matrix `yaw`/`pitch` are swapped → frontal filter (`|yaw| < 0.15`) accepts wrong frames, rejects correct ones → garbage measurements → consistent Heart misclassification on iPhone.
+
+Three-part fix:
+1. `getUserMedia` changed to `width: { ideal: 480 }, height: { ideal: 640 }` — portrait-preferred dimensions signal to iOS
+2. `videoRotated = W > H && devicePortrait` (devicePortrait = `window.innerHeight > window.innerWidth`). If true: rotate landmarks 90° CCW via `(x,y) → (y, 1−x)`, swap effective dims to `mW=H, mH=W`
+3. Pose matrix swap: `videoRotated ? { yaw: p.pitch, pitch: -p.yaw } : p`
+
+**Canvas drawing uses `lmRaw`** (raw video pixel coords). **Measurement uses corrected `lm` + `mW/mH`**. **Skin tone sampling uses `lmRaw`** (maps into raw video pixel space). Never pass corrected landmarks to canvas draw or skin tone functions.
+
 **Measurement robustness** (all free, no API):
 - `jawW` = average of `lm172↔lm397` (gonion) + `lm136↔lm379` (jaw body) — two parallel pairs, more stable than single
 - `chinW` = average of `lm148↔lm377` (tip) + `lm176↔lm400` (slightly wider base)
@@ -319,7 +328,7 @@ Measurements accumulate **only when face is frontal** (`|yaw| < 0.15 && |pitch| 
 - `m.weight` = `(1 − |yaw|/0.15) × (1 − |pitch|/0.18)` — pose weight stored per frame
 - `avgBuffer()` uses **weighted trimmed mean** — drops top+bottom 15% extreme frames, then weights remaining by pose quality. Frontal frames count more; edge-of-window frames count less.
 
-Face shape classifier: Oval scores **proactively** when `lenR 1.18–1.36` and `|diff| < 0.11` (+5 pts), then also as last resort when no other shape reaches ≥ 5 points.
+Face shape classifier: Oval scores **proactively** in two tiers — +5 for `lenR 1.19–1.24` + `|diff| < 0.11` (core Oval zone), +3 for `lenR 1.24–1.32` + `|diff| < 0.09` (borderline zone where Long also scores). Also last-resort when no other shape reaches ≥ 5 points.
 
 **MediaPipe landmark compression**: Real-world facial ratios compress ~20% in MediaPipe coordinates because `cheekW` (lm234→lm454) measures near-ear width (wider than bizygomatic), and `faceLen` (lm10→lm152) starts at mid-forehead not hairline (shorter). Result: real 1.5:1 oval → ~1.20 in landmarks. All thresholds are calibrated for MediaPipe space, not tape-measure space.
 
@@ -328,10 +337,10 @@ Face shape classifier: Oval scores **proactively** when `lenR 1.18–1.36` and `
 | Shape | Key ratios | Prevalence |
 |---|---|---|
 | Oval | `lenR 1.19–1.32`, `|diff| < 0.11`, cheekbones widest | ~25–30% |
-| Heart | `jawR < 0.60`, `foreR > 0.89`, `diff > 0.13`, narrow chin | ~10–15% |
+| Heart | `jawR < 0.60`, `foreR > 0.93`, `diff > 0.17`, narrow chin | ~10–15% |
 | Round | `lenR < 1.18`, soft jaw angle | ~15–20% |
-| Square | `|diff| < 0.09`, `jawR > 0.76`, angular jaw | ~15% |
-| Long | `lenR > 1.38` (real > ~1.5:1) | ~10% |
+| Square | `|diff| < 0.09`, `jawR > 0.76`, angular jaw (soft jaw → reduced score) | ~15% |
+| Long | `lenR > 1.32` in MP space (real > ~1.5:1; MP compresses ~15–20%) | ~10% |
 
 Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.60` for +4, `< 0.65` for +2), wide forehead (`foreR > 0.93`), forehead-jaw taper (`diff > 0.17` only — lower tier removed), narrow chin (`chinR < 0.38` female / `< 0.40` male with `foreR > 0.91`; lower tier requires `foreR > 0.89`). If ANY is absent, Heart score stays low — prevents false positives.
 
