@@ -233,8 +233,8 @@ function poseFromLandmarks(lm: Lm[]): { yaw: number; pitch: number } {
 
 // ── Coverage ring ──────────────────────────────────────────────────────────
 const N_SEGS           = 8;
-const SEG_REQUIRED_MS  = 500;  // 0.5s dwell per segment — registers while still in position
-const INIT_REQUIRED_MS = 1500; // 1.5s frontal hold before rotation phase
+const SEG_REQUIRED_MS  = 1000; // 1s dwell per segment — more samples per position
+const INIT_REQUIRED_MS = 2500; // 2.5s frontal hold before rotation phase
 const MIN_COVERED      = 7;    // 7/8 segments = 315° coverage required
 
 // Map (yaw,pitch) → ring segment 0–7
@@ -408,7 +408,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         const m = measure(lm, W, H);
         m.weight = Math.max(0.1, (1 - Math.abs(yaw) / 0.15) * (1 - Math.abs(pitch) / 0.18));
         measureBuf.current.push(m);
-        if (measureBuf.current.length > 200) measureBuf.current.shift();
+        if (measureBuf.current.length > 400) measureBuf.current.shift();
       }
 
       // Save best frontal frame for GPT-4o (90% quality, non-mirrored)
@@ -421,7 +421,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       }
 
       // Sample skin tone from cheeks during frontal hold (accumulate LAB values)
-      if (isFrontal && !close && skinLabBuf.current.length < 90) {
+      if (isFrontal && !close && skinLabBuf.current.length < 180) {
         const sample = sampleSkinToneFromVideo(video, lm);
         if (sample) skinLabBuf.current.push(sample);
       }

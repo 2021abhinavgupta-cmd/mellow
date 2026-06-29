@@ -304,8 +304,8 @@ Tune these to control scan difficulty:
 | Constant | Value | Effect |
 |---|---|---|
 | `N_SEGS` | `8` | Coverage ring divided into 8 arc segments |
-| `SEG_REQUIRED_MS` | `500` | Milliseconds of dwell per segment — ticks fill in real-time while user holds position |
-| `INIT_REQUIRED_MS` | `1500` | Milliseconds of frontal hold before rotation phase |
+| `SEG_REQUIRED_MS` | `1000` | Milliseconds of dwell per segment — ticks fill in real-time while user holds position |
+| `INIT_REQUIRED_MS` | `2500` | Milliseconds of frontal hold before rotation phase |
 | `MIN_COVERED` | `7` | Segments required to complete (7/8 = ~315°) |
 
 Timing is **time-based** (ms), not frame-based — works correctly at 30fps, 60fps, or 120fps.
@@ -337,7 +337,7 @@ Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.70`), w
 
 `onCapture(imageDataUrl, faceShape)` — skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` to localStorage before firing callback; callers read it from there.
 
-`skinLabBuf` cap is 90 so samples accumulate across full scan duration.
+`skinLabBuf` cap is 180 so samples accumulate across full scan duration.
 
 `gender: "male" | "female"` — required prop. `page.tsx` uses `pendingScanner` state to show a gender picker before launching the scanner (gender known at scan start, not after).
 
