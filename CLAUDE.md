@@ -15,6 +15,14 @@ npm run start    # serve production build
 
 No test suite configured yet.
 
+## Deployment
+
+Vercel deploys from `main`; code commits to `master`. Always push both:
+
+```bash
+git push origin master:master && git push origin master:main
+```
+
 ## Stack
 
 - **Next.js 16.2.9** (App Router, Turbopack) — read `node_modules/next/dist/docs/` before writing any Next.js code; this version has breaking changes from training data
@@ -329,6 +337,12 @@ Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.70`), w
 `classifyFromAvg(avg, debug, gender)` — 3rd param required at both call sites (live display + final capture). Defaults to `"female"` but must be passed explicitly.
 
 Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds: male `0.43/0.46`, female `0.41/0.44`. Round requires `lenR < 1.15` for males vs 1.20 for females. Research confirms males have wider mandible (higher jawR → more Square/Rectangle tendency); females softer jaw (more Oval/Heart tendency).
+
+Classifier outputs 9 shapes: `Oval`, `Round`, `Square`, `Rectangle`, `Long`, `Heart`, `Diamond`, `Triangle`, `Inverted Triangle`.
+
+`classifyFromAvg(avg, true, gender)` — pass `true` to log ratios + scores to browser console. Use during threshold tuning to see exact `lenR`, `jawR`, `foreR`, `chinR`, `diff` for a real face.
+
+`diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.07–0.10`. Never lower the Heart `diff` threshold below `0.10` — anything below `0.08` over-classifies Heart for majority of faces.
 
 UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(201,168,130,0.45)` (brown-light at 45% opacity). Never use black/white/green — those are Apple Face ID colors, not Mellow brand.
 
