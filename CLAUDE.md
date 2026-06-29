@@ -333,9 +333,17 @@ Face shape classifier: Oval scores **proactively** when `lenR 1.18–1.36` and `
 | Square | `|diff| < 0.09`, `jawR > 0.76`, angular jaw | ~15% |
 | Long | `lenR > 1.38` (real > ~1.5:1) | ~10% |
 
-Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.60` for +4, `< 0.65` for +2), wide forehead (`foreR > 0.89`), forehead-jaw taper (`diff > 0.13`), narrow chin (`chinR < 0.38` female / `< 0.40` male with `foreR > 0.91`). If ANY is absent, Heart score stays low — prevents false positives.
+Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.60` for +4, `< 0.65` for +2), wide forehead (`foreR > 0.93`), forehead-jaw taper (`diff > 0.17` only — lower tier removed), narrow chin (`chinR < 0.38` female / `< 0.40` male with `foreR > 0.91`; lower tier requires `foreR > 0.89`). If ANY is absent, Heart score stays low — prevents false positives.
 
 **Root cause of Heart over-classification**: Anthropometric research shows average face has bitemporal/bizygomatic = 0.82, bigonial/bizygomatic = 0.72 → `diff_real ≈ 0.10`. In MediaPipe space (near-ear cheekW inflates denominator ~15%), average jawR ≈ 0.63 and diff ≈ 0.08. Old thresholds (`jawR < 0.70`, `diff > 0.10`) caught the average face. Tighter thresholds + Oval proactive scoring fixed this.
+
+**Six classifier loopholes closed (commit f123eec)**:
+1. **Oval vs Long tie** — Oval proactive now tiered: +5 for lenR 1.19–1.24 (core Oval), +3 for 1.24–1.32 with diff < 0.09 (borderline); Long +5 wins cleanly at lenR 1.24–1.32. JS sort is unstable on equal scores — never let Oval and Long tie.
+2. **Rectangle lower tier too broad** — was `lenR > 1.18 && jawR > 0.75`, fired for most non-round faces. Now requires `lenR > 1.22 && jawR > 0.78 && isAngular`.
+3. **Square without angularity** — primary +7 block now gives +4 if jaw is soft; prevents soft-jawed Oval misclassified as Square.
+4. **Oval last-resort jawR** — tightened from 0.58–0.84 to 0.63–0.80 (old range covered ~95% of faces).
+5. **Heart chin lower tier** — foreR threshold raised 0.87 → 0.89.
+6. **Frontal image quality** — `bestCenterScore` ref tracks lowest `|yaw|+|pitch|` frame; replaces frontalImg whenever a more-centered frame arrives. GPT-4o now receives truly front-facing photo, not first-frontal-frame (which can be at edge of frontal window).
 
 `onCapture(imageDataUrl, faceShape)` — skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` to localStorage before firing callback; callers read it from there.
 
@@ -355,7 +363,7 @@ Classifier outputs 9 shapes: `Oval`, `Round`, `Square`, `Rectangle`, `Long`, `He
 - `eyeR = eyeW / cheekW` — eye width relative to face; Diamond faces have wide eyes vs narrow face (high eyeR with low foreR/jawR)
 - `taper = jawR − chinR` — jaw-to-chin taper; Square has low-moderate taper with wide jaw (~0.30-0.34). No longer used for Heart scoring (caused false positives for Oval faces).
 
-`diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.08` in MediaPipe space. Heart threshold must stay at `> 0.13` minimum — below this catches majority of Oval faces. Never lower below `0.13`.
+`diff = foreR - jawR` is most sensitive Heart discriminator. Average face `diff ≈ 0.08` in MediaPipe space. Heart threshold is `> 0.17` (only strong taper counts). Never lower below `0.13` — that threshold catches the majority of Oval faces.
 
 UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(201,168,130,0.45)` (brown-light at 45% opacity). Never use black/white/green — those are Apple Face ID colors, not Mellow brand.
 
