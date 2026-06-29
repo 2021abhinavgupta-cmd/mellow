@@ -125,9 +125,10 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
     Heart: 0, Round: 0, Square: 0, Oval: 0,
   };
 
-  // Length ratio — research: Long/Oblong lenR > 1.5 real → ~1.35+ in MediaPipe (near-ear cheekW compresses ~20%)
-  if (lenR > 1.38)       scores.Long  += 8;
-  else if (lenR > 1.30)  scores.Long  += 4;
+  // Length ratio — MediaPipe lenR compresses real values: lm10 starts mid-forehead (not hairline) and cheekW is near-ear
+  // Real lenR 1.5 → MP ~1.28–1.34; so Long threshold lowered accordingly
+  if (lenR > 1.32)       scores.Long  += 8;
+  else if (lenR > 1.24)  scores.Long  += 5;
   if (lenR < 1.14)       scores.Round += 8;
   else if (lenR < 1.18)  scores.Round += 4;
 
@@ -139,16 +140,14 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   if (jawR < 0.60)       { scores.Heart += 4; scores.Diamond += 2; }
   else if (jawR < 0.65)  scores.Heart += 2;
 
-  // Forehead/cheek ratio — Heart needs genuinely wide forehead (not just slightly wider)
+  // Forehead/cheek ratio — Heart needs very wide forehead; MediaPipe temple landmarks inflate foreR so threshold raised
   if (foreR > 0.93)      scores.Heart   += 4;
-  else if (foreR > 0.89) scores.Heart   += 2;
   if (foreR < 0.79)      scores.Diamond += 4;
   else if (foreR < 0.84) scores.Diamond += 2;
 
-  // Forehead-jaw differential — average face diff ≈ 0.08 in MediaPipe space (bitemporal 0.82 − bigonial 0.72 = 0.10 real, ÷1.15 cheekW inflation)
-  // Heart needs diff well above average — raise thresholds to avoid catching normal variation
+  // Forehead-jaw differential — average face diff ≈ 0.08–0.13 in MediaPipe space
+  // Only strong taper (> 0.17) counts — removes false Heart from moderate forehead-jaw gap
   if (diff > 0.17)       scores.Heart    += 6;
-  else if (diff > 0.13)  scores.Heart    += 3;
   if (diff < -0.10)      scores.Triangle += 6;
   else if (diff < -0.05) scores.Triangle += 3;
 
@@ -192,8 +191,8 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   // Round bonus: wide + short
   if (jawR > 0.82 && foreR > 0.82 && lenR < 1.18) scores.Round += 3;
 
-  // Long bonus: elongated + tapered (narrow) jaw, not square
-  if (lenR > 1.42 && jawR < 0.78) scores.Long += 3;
+  // Long bonus: elongated face with moderate jaw (lower threshold to match MP compression)
+  if (lenR > 1.34 && jawR < 0.80) scores.Long += 3;
 
   // Oval proactive — reward balanced proportions regardless of other scores
   // A small diff (forehead ≈ jaw) with moderate lenR is the strongest Oval signal
