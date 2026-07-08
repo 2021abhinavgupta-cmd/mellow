@@ -104,7 +104,7 @@ function avgBuffer(buf: M[]): M {
   };
 }
 
-function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): string {
+function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): { shape: string; confident: boolean } {
   const { foreW, eyeW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
   const lenR  = faceLen / cheekW;
   const jawR  = jawW    / cheekW;
@@ -219,7 +219,9 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
     console.log("[FaceShape] scores", Object.fromEntries(winner));
     console.log("[FaceShape] winner →", winner[0][0], `(${winner[0][1]} pts)`);
   }
-  return winner[0][1] > 0 ? winner[0][0] : "Oval";
+  const shape = winner[0][1] > 0 ? winner[0][0] : "Oval";
+  const gap = winner[0][1] - (winner[1]?.[1] ?? 0);
+  return { shape, confident: gap > 3 };
 }
 
 // ── Pose from 3D transformation matrix (column-major 4×4) ─────────────────
@@ -317,24 +319,32 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const frontalImg  = useRef<string | null>(null);
   const skinLabBuf     = useRef<{ L: number; a: number; b: number }[]>([]);
   const bestCenterScore = useRef(Infinity);
-  const initTimeMs  = useRef(0);
-  const segTimeMs   = useRef<number[]>(Array(N_SEGS).fill(0));
-  const lastDetectT = useRef(0);
-  const yawRef      = useRef(0);
-  const pitchRef    = useRef(0);
+  const initTimeMs      = useRef(0);
+  const segTimeMs       = useRef<number[]>(Array(N_SEGS).fill(0));
+  const lastDetectT     = useRef(0);
+  const yawRef          = useRef(0);
+  const pitchRef        = useRef(0);
+  const offscreenCanvas = useRef<HTMLCanvasElement | null>(null);
+  const scanFrameCount  = useRef(0);
+  const pulseTimeout    = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [status,         setStatus]         = useState<"instructions" | "loading" | "scanning" | "done" | "error">("instructions");
-  const [phase,          setPhase]          = useState<"init" | "scan">("init");
-  const [covered,        setCovered]        = useState<boolean[]>(Array(N_SEGS).fill(false));
-  const [coveredCount,   setCoveredCount]   = useState(0);
-  const [faceShape,      setFaceShape]      = useState<string | null>(null);
-  const [faceInView,     setFaceInView]     = useState(false);
-  const [tooClose,       setTooClose]       = useState(false);
-  const [initPct,        setInitPct]        = useState(0);
-  const [dotAngle,       setDotAngle]       = useState<number | null>(null);
-  const [activeSeg,      setActiveSeg]      = useState<number | null>(null);
-  const [activeSegPct,   setActiveSegPct]   = useState<number>(0);
-  const [skinToneResult, setSkinToneResult] = useState<SkinToneResult | null>(null);
+  const [status,              setStatus]              = useState<"instructions" | "loading" | "scanning" | "done" | "error">("instructions");
+  const [loadKey,             setLoadKey]             = useState(0);
+  const [phase,               setPhase]               = useState<"init" | "scan">("init");
+  const [covered,             setCovered]             = useState<boolean[]>(Array(N_SEGS).fill(false));
+  const [coveredCount,        setCoveredCount]        = useState(0);
+  const [faceShape,           setFaceShape]           = useState<string | null>(null);
+  const [faceShapeConfident,  setFaceShapeConfident]  = useState(true);
+  const [faceInView,          setFaceInView]          = useState(false);
+  const [tooClose,            setTooClose]            = useState(false);
+  const [tooFar,              setTooFar]              = useState(false);
+  const [lightingWarn,        setLightingWarn]        = useState<"dark" | "bright" | null>(null);
+  const [initPct,             setInitPct]             = useState(0);
+  const [dotAngle,            setDotAngle]            = useState<number | null>(null);
+  const [activeSeg,           setActiveSeg]           = useState<number | null>(null);
+  const [activeSegPct,        setActiveSegPct]        = useState<number>(0);
+  const [pulseSeg,            setPulseSeg]            = useState<number | null>(null);
+  const [skinToneResult,      setSkinToneResult]      = useState<SkinToneResult | null>(null);
 
   const doCapture = useCallback((shape: string) => {
     if (captured.current) return;
@@ -366,6 +376,36 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
     setStatus("done");
     setTimeout(() => onCapture(cap.toDataURL("image/jpeg", 0.88), shape), 800);
   }, [onCapture]);
+
+  const handleRetry = useCallback(() => {
+    if (pulseTimeout.current) clearTimeout(pulseTimeout.current);
+    captured.current      = false;
+    measureBuf.current    = [];
+    frontalImg.current    = null;
+    skinLabBuf.current    = [];
+    bestCenterScore.current = Infinity;
+    initTimeMs.current    = 0;
+    segTimeMs.current     = Array(N_SEGS).fill(0);
+    lastDetectT.current   = 0;
+    scanFrameCount.current = 0;
+    setPhase("init");
+    setCovered(Array(N_SEGS).fill(false));
+    setCoveredCount(0);
+    setFaceShape(null);
+    setFaceShapeConfident(true);
+    setFaceInView(false);
+    setTooClose(false);
+    setTooFar(false);
+    setLightingWarn(null);
+    setInitPct(0);
+    setDotAngle(null);
+    setActiveSeg(null);
+    setActiveSegPct(0);
+    setPulseSeg(null);
+    setSkinToneResult(null);
+    setStatus("loading");
+    setLoadKey(k => k + 1);
+  }, []);
 
   const detect = useCallback(() => {
     const video  = videoRef.current;
@@ -402,10 +442,31 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       setFaceInView(true);
       drawFace(ctx, lmRaw, W, H);     // draw on canvas using raw coords (canvas is in video space)
 
-      // Face size check — cheekW > 52% of effective frame width = too close
+      // Face size check — cheekW > 52% = too close; < 15% = too far (landmark precision drops)
       const cheekWnorm = Math.abs(lm[454].x - lm[234].x);
       const close = cheekWnorm > 0.52;
+      const far   = cheekWnorm < 0.15;
       setTooClose(close);
+      setTooFar(far);
+
+      // Lighting quality check — throttled to every 30 frames, samples nose region
+      scanFrameCount.current++;
+      if (scanFrameCount.current % 30 === 1) {
+        if (!offscreenCanvas.current) {
+          offscreenCanvas.current = document.createElement("canvas");
+          offscreenCanvas.current.width = 40; offscreenCanvas.current.height = 40;
+        }
+        const oc = offscreenCanvas.current;
+        const octx = oc.getContext("2d")!;
+        const nx = Math.min(Math.max(lmRaw[1].x * W, 20), W - 20);
+        const ny = Math.min(Math.max(lmRaw[1].y * H, 20), H - 20);
+        octx.drawImage(video, nx - 20, ny - 20, 40, 40, 0, 0, 40, 40);
+        const px = octx.getImageData(0, 0, 40, 40).data;
+        let lum = 0;
+        for (let i = 0; i < px.length; i += 4) lum += 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        lum /= px.length / 4;
+        setLightingWarn(lum < 50 ? "dark" : lum > 230 ? "bright" : null);
+      }
 
       // Pose: prefer transformation matrix (true 3D), fall back to landmarks
       // If video is rotated, swap yaw/pitch so frontal detection works correctly
@@ -454,7 +515,9 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       }
 
       if (measureBuf.current.length >= 8) {
-        setFaceShape(classifyFromAvg(avgBuffer(measureBuf.current), false, gender)); // live display, no log
+        const live = classifyFromAvg(avgBuffer(measureBuf.current), false, gender);
+        setFaceShape(live.shape);
+        setFaceShapeConfident(live.confident);
       }
 
       // Time delta — capped at 100ms to avoid huge jumps after tab switch
@@ -483,10 +546,15 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
               const next = [...prev]; next[seg] = true;
               const count = next.filter(Boolean).length;
               setCoveredCount(count);
+              // Brief pulse on the newly completed segment
+              setPulseSeg(seg);
+              if (pulseTimeout.current) clearTimeout(pulseTimeout.current);
+              pulseTimeout.current = setTimeout(() => setPulseSeg(null), 500);
               if (count >= MIN_COVERED && measureBuf.current.length >= 8) {
-                const shape = classifyFromAvg(avgBuffer(measureBuf.current), true, gender); // final, log it
-                setFaceShape(shape);
-                doCapture(shape);
+                const final = classifyFromAvg(avgBuffer(measureBuf.current), true, gender);
+                setFaceShape(final.shape);
+                setFaceShapeConfident(final.confident);
+                doCapture(final.shape);
               }
               return next;
             });
@@ -506,7 +574,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   }, [doCapture]);
 
   useEffect(() => {
-    if (status !== "loading") return;
+    if (loadKey === 0) return;
     let cancelled = false;
     async function init() {
       try {
@@ -544,7 +612,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       stream.current?.getTracks().forEach((t) => t.stop());
       landmarker.current?.close();
     };
-  }, [status]);
+  }, [loadKey]);
 
   useEffect(() => {
     if (status !== "scanning") return;
@@ -597,7 +665,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
           </ul>
 
           <button
-            onClick={() => setStatus("loading")}
+            onClick={() => { setStatus("loading"); setLoadKey(k => k + 1); }}
             className="w-full py-3.5 rounded-full bg-brown-dark text-cream font-sans text-sm tracking-widest uppercase hover:bg-brown-mid transition-colors"
           >
             Start Scan
@@ -629,9 +697,21 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
             style={{ transform: "scaleX(-1)" }}
           />
 
-          {/* Positioning guide — dashed circle when no face detected */}
+          {/* Face outline guide — shows when no face detected */}
           {status === "scanning" && !faceInView && (
-            <div className="absolute inset-[12%] rounded-full border border-dashed border-brown-light/40 pointer-events-none" />
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+              <ellipse cx={50} cy={48} rx={28} ry={37}
+                fill="none" stroke="rgba(201,168,130,0.4)" strokeWidth="1" strokeDasharray="4 3" />
+            </svg>
+          )}
+
+          {/* Lighting warning */}
+          {status === "scanning" && faceInView && lightingWarn && (
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-center pb-3 pointer-events-none">
+              <p className="font-sans text-[0.55rem] tracking-wide text-center text-cream/70 bg-brown-dark/60 rounded px-2 py-0.5">
+                {lightingWarn === "dark" ? "Too dark — face a light source" : "Too bright — try turning slightly"}
+              </p>
+            </div>
           )}
 
           {/* Loading overlay */}
@@ -662,7 +742,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
                 {faceShape}
               </p>
               <p className="font-sans text-[0.55rem] tracking-[0.35em] uppercase text-brown-mid mt-1">
-                face shape detected
+                {faceShapeConfident ? "face shape detected" : "approximate result"}
               </p>
               {skinToneResult && (
                 <div className="flex items-center gap-2 mt-3">
@@ -675,6 +755,12 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
                   </p>
                 </div>
               )}
+              <button
+                onClick={handleRetry}
+                className="mt-4 font-sans text-[0.6rem] tracking-[0.2em] uppercase text-brown-mid/60 underline underline-offset-2"
+              >
+                Scan again
+              </button>
             </motion.div>
           )}
         </div>
@@ -688,19 +774,21 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
               const seg = Math.floor((i / 40) * N_SEGS);
               const isDone    = phase === "scan" && covered[seg];
               const isPending = phase === "scan" && !covered[seg] && seg === activeSeg;
+              const isPulsing = isDone && seg === pulseSeg;
               return (
                 <line
                   key={i}
                   x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
-                  x2={50 + 49 * Math.cos(angle)} y2={50 + 49 * Math.sin(angle)}
+                  x2={50 + (isPulsing ? 50 : 49) * Math.cos(angle)} y2={50 + (isPulsing ? 50 : 49) * Math.sin(angle)}
                   stroke={
+                    isPulsing ? "#C9A882" :
                     isDone    ? "#8B6347" :
                     isPending ? `rgba(139,99,71,${(0.3 + 0.7 * activeSegPct).toFixed(2)})` :
                     "rgba(201,168,130,0.45)"
                   }
-                  strokeWidth="2"
+                  strokeWidth={isPulsing ? "3" : "2"}
                   strokeLinecap="round"
-                  style={{ transition: isDone ? "stroke 0.15s ease" : "none" }}
+                  style={{ transition: isDone ? "stroke 0.15s ease, stroke-width 0.15s ease" : "none" }}
                 />
               );
             })}
@@ -728,22 +816,31 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       {status === "scanning" && (
         <div className="mt-10 px-8 text-center max-w-xs">
           <AnimatePresence mode="wait">
-            <motion.p
-              key={`${phase}-${faceInView}-${tooClose}`}
+            <motion.div
+              key={`${phase}-${faceInView}-${tooClose}-${tooFar}-${lightingWarn}`}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25 }}
-              className="text-brown-dark text-lg font-sans font-medium leading-snug"
             >
-              {tooClose
-                ? "Move back a little"
-                : !faceInView
-                ? "Position your face within the frame"
-                : phase === "init"
-                ? "Look straight ahead"
-                : "Move your head slowly to complete the circle"}
-            </motion.p>
+              <p className="text-brown-dark text-lg font-sans font-medium leading-snug">
+                {tooClose
+                  ? "Move back a little"
+                  : tooFar
+                  ? "Move closer to the camera"
+                  : !faceInView
+                  ? "Position your face within the frame"
+                  : phase === "init"
+                  ? "Look straight ahead"
+                  : coverageHint(covered, faceInView, tooClose)}
+              </p>
+              {/* Countdown during frontal hold */}
+              {phase === "init" && faceInView && !tooClose && !tooFar && initPct > 0 && initPct < 1 && (
+                <p className="mt-1 font-sans text-brown-mid/50 text-xs tracking-widest">
+                  {Math.ceil((1 - initPct) * INIT_REQUIRED_MS / 1000)}s
+                </p>
+              )}
+            </motion.div>
           </AnimatePresence>
         </div>
       )}
