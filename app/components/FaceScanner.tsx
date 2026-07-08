@@ -323,7 +323,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const yawRef      = useRef(0);
   const pitchRef    = useRef(0);
 
-  const [status,         setStatus]         = useState<"loading" | "scanning" | "done" | "error">("loading");
+  const [status,         setStatus]         = useState<"instructions" | "loading" | "scanning" | "done" | "error">("instructions");
   const [phase,          setPhase]          = useState<"init" | "scan">("init");
   const [covered,        setCovered]        = useState<boolean[]>(Array(N_SEGS).fill(false));
   const [coveredCount,   setCoveredCount]   = useState(0);
@@ -506,6 +506,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   }, [doCapture]);
 
   useEffect(() => {
+    if (status !== "loading") return;
     let cancelled = false;
     async function init() {
       try {
@@ -543,7 +544,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       stream.current?.getTracks().forEach((t) => t.stop());
       landmarker.current?.close();
     };
-  }, []);
+  }, [status]);
 
   useEffect(() => {
     if (status !== "scanning") return;
@@ -562,10 +563,56 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         <X className="w-4 h-4" />
       </button>
 
-      {/* Circle + Ring wrapper — always in DOM so videoRef stays mounted */}
+      {/* Pre-scan instructions */}
+      {status === "instructions" && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="flex flex-col items-center px-8 max-w-sm w-full"
+        >
+          <h2
+            className="font-display text-brown-dark text-3xl mb-2 text-center"
+            style={{ fontStyle: "italic", fontWeight: 300 }}
+          >
+            Before we begin
+          </h2>
+          <p className="font-sans text-brown-mid/60 text-xs tracking-wide text-center mb-8">
+            For the most accurate scan, follow these tips
+          </p>
+
+          <ul className="w-full space-y-4 mb-10">
+            {[
+              "Sit in a well-lit room with light facing you",
+              "Tuck hair back so your full face is visible",
+              "Remove glasses if you wear them",
+              "Hold your phone at eye level, arm's length away",
+              "Keep a neutral expression throughout",
+            ].map((text) => (
+              <li key={text} className="flex items-start gap-3">
+                <span className="font-sans text-brown-light text-xs mt-0.5 select-none">—</span>
+                <span className="font-sans text-brown-dark text-sm leading-snug">{text}</span>
+              </li>
+            ))}
+          </ul>
+
+          <button
+            onClick={() => setStatus("loading")}
+            className="w-full py-3.5 rounded-full bg-brown-dark text-cream font-sans text-sm tracking-widest uppercase hover:bg-brown-mid transition-colors"
+          >
+            Start Scan
+          </button>
+
+          <p className="mt-5 font-sans text-[0.58rem] text-brown-mid/40 tracking-wide text-center leading-relaxed">
+            Results are a guide, not a diagnosis — accuracy varies with lighting and camera quality
+          </p>
+        </motion.div>
+      )}
+
+      {/* Circle + Ring wrapper — always in DOM so videoRef stays mounted; hidden during instructions */}
       <div
         className="relative flex-shrink-0"
-        style={{ width: "calc(min(72vw, 340px) + 32px)", height: "calc(min(72vw, 340px) + 32px)" }}
+        style={{ width: "calc(min(72vw, 340px) + 32px)", height: "calc(min(72vw, 340px) + 32px)", display: status === "instructions" ? "none" : undefined }}
       >
         {/* Circular video */}
         <div className="absolute rounded-full overflow-hidden bg-brown-dark" style={{ inset: 16 }}>
@@ -708,10 +755,12 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         </p>
       )}
 
-      {/* Privacy note */}
-      <p className="absolute bottom-6 font-sans text-[0.58rem] text-brown-mid/40 tracking-wide text-center px-8">
-        Camera stays on your device — nothing uploaded during scanning
-      </p>
+      {/* Privacy note — hidden during instructions (that screen has its own footer) */}
+      {status !== "instructions" && (
+        <p className="absolute bottom-6 font-sans text-[0.58rem] text-brown-mid/40 tracking-wide text-center px-8">
+          Camera stays on your device — nothing uploaded during scanning
+        </p>
+      )}
     </div>
   );
 }
