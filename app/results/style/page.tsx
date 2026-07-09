@@ -129,6 +129,7 @@ export default function StyleResultsPage() {
       setPhase("generating");
 
       const gender = (typeof window !== "undefined" ? localStorage.getItem("mellow_gender") : null) ?? "female";
+      const bodyType = (typeof window !== "undefined" ? localStorage.getItem("mellow_body_type") : null) ?? s.bodyType;
       const isMale = gender === "male";
       const genderNote = isMale
         ? "This is a MALE person. Show him in masculine men's clothing only (shirts, trousers, suits, kurtas). No dresses, skirts, or feminine items."
@@ -142,6 +143,7 @@ export default function StyleResultsPage() {
         const prompt = [
           `Fashion edit: show this SAME person wearing a ${label} outfit — ${styles}.`,
           genderNote,
+          `Body shape: ${bodyType} — choose silhouettes that flatter this shape.`,
           `Colours harmonious with their ${a.season} colour season.`,
           `MUST keep IDENTICAL: face, skin tone, body proportions.`,
           `Full-length or 3/4 view, natural standing pose, professional fashion photography.`,

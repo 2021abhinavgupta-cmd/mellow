@@ -148,6 +148,7 @@ export default function HairResultsPage() {
       setPhase("generating");
 
       const gender = (typeof window !== "undefined" ? localStorage.getItem("mellow_gender") : null) ?? "female";
+      const faceShape = (typeof window !== "undefined" ? localStorage.getItem("mellow_face_shape") : null) ?? h.faceShape;
       const genderNote = gender === "male"
         ? "This is a MALE person. Apply a men's hairstyle only. Keep masculine features."
         : "This is a FEMALE person. Apply a women's hairstyle only.";
@@ -162,7 +163,7 @@ export default function HairResultsPage() {
           genderNote,
           `MUST keep IDENTICAL: face, skin tone, eyes, nose, lips, expression, clothing, background.`,
           `ONLY change: hair length, texture, layering, styling.`,
-          `Person has ${scannedFaceShape ?? h.faceShape} face and ${h.observedHairType} hair naturally.`,
+          `Person has ${faceShape} face and ${h.observedHairType} hair naturally.`,
           `Conservative minimal edit — same person, different hairstyle only.`,
         ].join(" ");
 
