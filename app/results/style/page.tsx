@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Sparkles, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
+import { BODY_SHAPE_DESCRIPTIONS, type BodyShape } from "@/app/lib/bodyShape";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 import { styleImageCache } from "@/app/lib/imageCache";
 
@@ -83,6 +84,7 @@ export default function StyleResultsPage() {
   const router = useRouter();
   const [photo, setPhoto] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
+  const [measuredBodyType, setMeasuredBodyType] = useState<BodyShape | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("loading");
   const [genDone, setGenDone] = useState(0);
@@ -209,6 +211,9 @@ export default function StyleResultsPage() {
     if (!stored) { router.replace("/"); return; }
     setPhoto(stored);
     runAnalysis(stored);
+    // Read measured body type if user completed body scan
+    const bodyType = localStorage.getItem("mellow_body_type");
+    if (bodyType) setMeasuredBodyType(bodyType as BodyShape);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -284,9 +289,24 @@ export default function StyleResultsPage() {
               className="font-display text-5xl sm:text-6xl text-brown-dark leading-tight"
               style={{ fontStyle: "italic", fontWeight: 300 }}
             >
-              {s.bodyType}
+              {measuredBodyType ?? s.bodyType}
             </h1>
-            <p className="font-sans text-sm text-brown-mid leading-relaxed max-w-md mt-3">{s.bodyTypeDescription}</p>
+            {measuredBodyType && (
+              <span className="inline-block font-sans text-[0.55rem] tracking-widest uppercase text-brown-mid border border-brown-mid/40 rounded-full px-2.5 py-0.5 mt-1 mb-1">
+                Based on measurements
+              </span>
+            )}
+            <p className="font-sans text-sm text-brown-mid leading-relaxed max-w-md mt-2">
+              {measuredBodyType
+                ? BODY_SHAPE_DESCRIPTIONS[measuredBodyType]
+                : s.bodyTypeDescription}
+            </p>
+            <button
+              onClick={() => router.push("/body-scan")}
+              className="mt-3 font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors underline underline-offset-2"
+            >
+              {measuredBodyType ? "Update body analysis" : "Refine with measurements →"}
+            </button>
           </div>
         </motion.div>
 

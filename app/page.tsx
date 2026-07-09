@@ -134,6 +134,8 @@ export default function Home() {
     if (!image || !gender) return;
     localStorage.removeItem("mellow_analysis");
     localStorage.removeItem("mellow_skin_analysis");
+    localStorage.removeItem("mellow_body_type");
+    localStorage.removeItem("mellow_measurements");
     sessionStorage.removeItem("mellow_hair_images");
     sessionStorage.removeItem("mellow_style_images");
     localStorage.setItem("mellow_image", image);
