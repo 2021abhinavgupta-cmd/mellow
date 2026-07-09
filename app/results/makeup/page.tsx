@@ -154,6 +154,9 @@ export default function MakeupResultsPage() {
           <span className="font-sans text-xs tracking-widest uppercase">Colour Analysis</span>
         </button>
         <span className="font-display text-2xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>mellow</span>
+        <button onClick={() => router.push("/results/hub")} className="font-sans text-xs tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors">
+          Dashboard
+        </button>
       </nav>
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 space-y-5">

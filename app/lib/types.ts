@@ -88,5 +88,12 @@ export interface ColorAnalysis {
     avoid: string[];
     outfitFormula: string;
     quickTips: string[];
+    jewellery: {
+      bestMetals: string[];
+      neckStyles: string[];
+      earringStyles: string[];
+      banglesAndBracelets: string[];
+      tip: string;
+    };
   };
 }

@@ -273,6 +273,9 @@ export default function StyleResultsPage() {
         <span className="font-display text-2xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
           mellow
         </span>
+        <button onClick={() => router.push("/results/hub")} className="font-sans text-xs tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors">
+          Dashboard
+        </button>
       </nav>
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 space-y-5">
@@ -504,6 +507,72 @@ export default function StyleResultsPage() {
             </div>
           </Card>
         </motion.div>
+
+        {/* ── JEWELLERY ── */}
+        {s.jewellery && (
+          <motion.div {...fade(0.48)}>
+            <Card>
+              <SectionLabel>Jewellery Guide</SectionLabel>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-4">
+                  {s.jewellery.bestMetals?.length > 0 && (
+                    <div>
+                      <p className="font-sans text-[0.55rem] tracking-[0.15em] uppercase text-brown-mid mb-2">Best Metals</p>
+                      <div className="flex gap-2 flex-wrap">
+                        {s.jewellery.bestMetals.map((m, i) => (
+                          <span key={`jm-${i}`} className="font-sans text-xs text-brown-mid border border-brown-light/40 rounded-full px-4 py-1.5">{m}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {s.jewellery.neckStyles?.length > 0 && (
+                    <div>
+                      <p className="font-sans text-[0.55rem] tracking-[0.15em] uppercase text-brown-mid mb-2">Necklace Styles</p>
+                      <ul className="space-y-1.5">
+                        {s.jewellery.neckStyles.map((n, i) => (
+                          <li key={`jn-${i}`} className="flex gap-2 font-sans text-xs text-brown-dark leading-snug">
+                            <span className="text-brown-light flex-shrink-0">•</span>{n}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {s.jewellery.earringStyles?.length > 0 && (
+                    <div>
+                      <p className="font-sans text-[0.55rem] tracking-[0.15em] uppercase text-brown-mid mb-2">Earring Styles</p>
+                      <ul className="space-y-1.5">
+                        {s.jewellery.earringStyles.map((e, i) => (
+                          <li key={`je-${i}`} className="flex gap-2 font-sans text-xs text-brown-dark leading-snug">
+                            <span className="text-brown-light flex-shrink-0">•</span>{e}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {s.jewellery.banglesAndBracelets?.length > 0 && (
+                    <div>
+                      <p className="font-sans text-[0.55rem] tracking-[0.15em] uppercase text-brown-mid mb-2">Bangles & Bracelets</p>
+                      <ul className="space-y-1.5">
+                        {s.jewellery.banglesAndBracelets.map((b, i) => (
+                          <li key={`jb-${i}`} className="flex gap-2 font-sans text-xs text-brown-dark leading-snug">
+                            <span className="text-brown-light flex-shrink-0">•</span>{b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {s.jewellery.tip && (
+                <p className="font-sans text-xs text-brown-mid mt-4 leading-relaxed border-t border-brown-light/20 pt-3">
+                  {s.jewellery.tip}
+                </p>
+              )}
+            </Card>
+          </motion.div>
+        )}
 
         {/* ── CTA: FACE SHAPE GUIDE ── */}
         <motion.div {...fade(0.50)} className="print:hidden">

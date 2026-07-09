@@ -46,6 +46,13 @@ app/
       route.ts            # POST handler: receives image data URL, calls GPT-4o vision, returns ColorAnalysis JSON
     generate-visuals/
       route.ts            # POST handler: takes photo + prompts[], calls gpt-image-1 images.edit, returns generated images
+  skin-scan/
+    page.tsx              # Skin Scan entry: instructions → SkinScanner → POST /api/analyze-skin → /results/skin
+  components/
+    SkinScanner.tsx       # Close-up face scan for skin analysis (holds 4s, crops face region)
+  api/
+    analyze-skin/
+      route.ts            # POST handler: receives cropped face image, calls GPT-4o/Gemini, returns SkinAnalysis JSON
   results/
     page.tsx              # Colour Analysis page: season, undertone, best colors, palette, style guide
     makeup/
@@ -55,7 +62,9 @@ app/
     style/
       page.tsx            # Style Guide page: body type, occasion tabs with AI outfit images, necklines, prints, outfit formula
     face/
-      page.tsx            # PLANNED Sprint 3: face shape card, glasses/specs recs, jewellery by face shape
+      page.tsx            # Face shape card + all-shapes reference chart; CTA → /skin-scan
+    skin/
+      page.tsx            # Skin Analysis page: skin type, concerns severity bars, routine tabs, ingredients
     grooming/
       page.tsx            # PLANNED Sprint 4: men only — beard styles, skincare, fragrance (replaces makeup for men)
 ```
@@ -123,6 +132,7 @@ Route handler (app/api/generate-visuals/route.ts)
 | `mellow_gender` | `"male"` or `"female"` | User uploads new photo |
 | `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | User uploads new photo |
 | `mellow_skin_tone` | `SkinToneResult` JSON — ITA, Fitzpatrick, Monk, hex, LAB | User uploads new photo |
+| `mellow_skin_analysis` | `SkinAnalysis` JSON — skin type, concerns, routine, recommendations | User runs new skin scan |
 
 Planned additions (not yet built):
 
@@ -379,6 +389,24 @@ UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(
 Real-time tick fill: `activeSeg` + `activeSegPct` states update every frame in scan phase; pending segment ticks interpolate `rgba(139,99,71,0.3→1.0)` as dwell accumulates. No CSS transition on pending ticks — must feel instant.
 
 Post-scan UI: `fromScan` flag in `page.tsx` — when `true`, shows face shape card (shape name + skin tone swatch, no photo). Photo still saved to localStorage for GPT-4o. Upload path always shows photo preview (`fromScan = false`).
+
+## SkinScanner (`app/components/SkinScanner.tsx`)
+
+Close-up skin detail scanner. Same 3-part iPhone portrait fix as FaceScanner: portrait-biased `getUserMedia` dims, `videoRotated = W > H && devicePortrait`, landmark coord rotation + pose matrix yaw/pitch swap.
+
+**Key constants**: `HOLD_MS = 4000` — user must hold still 4s. Stricter pose than FaceScanner: `|yaw| < 0.10 && |pitch| < 0.12`. Close-up check: `cheekW / mW < 0.20` = too far (user must fill frame).
+
+**Face-tracked canvas oval**: `faceCx = (lm[234].x + lm[454].x)/2 * W`, `faceCy = (lm[10].y + lm[152].y)/2 * H` — raw lm coords (not corrected), same reason as FaceScanner canvas draw. Falls back to `W/2, H*0.46` when no face.
+
+**RAF loop stale closure pattern**: any state value read inside RAF loop needs a `useRef` mirror updated alongside every `setState` call. Example: `holdPctRef.current = pct` paired with `setHoldPct(pct)`. Canvas reads the ref; React state drives the UI. Without this, the closure captures the initial value (0) forever.
+
+**Canvas draw ordering**: draw oval BEFORE `if (!lm || !mx) return` early exit — guide oval must show even when no face detected.
+
+`onCapture(imageDataUrl)` fires with 800px-wide cropped JPEG (face bounding box + 12% padding). Does NOT write `mellow_skin_tone` — that's FaceScanner only.
+
+**AbortController pattern for cancellable fetch**: store controller in `useRef` (`controllerRef`) so a Cancel button in a different render cycle can abort. 55s client-side timeout (`setTimeout(() => controller.abort(), 55000)`), server `maxDuration = 60`. Detect cancellation with `e.name === "AbortError"`.
+
+**Numbered list markers**: use `String(i + 1).padStart(2, "0")` — not `` 0${i + 1} `` which produces `010`, `011`, … at index ≥ 10.
 
 ## Design system
 

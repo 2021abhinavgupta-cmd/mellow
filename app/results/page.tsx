@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, ArrowRight, Download } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ArrowRight, Download, Share2 } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
+import dynamic from "next/dynamic";
+
+const ShareCard = dynamic(() => import("@/app/components/ShareCard"), { ssr: false });
 
 function Dot({ hex }: { hex: string }) {
   return (
@@ -66,6 +69,8 @@ export default function ColorResultsPage() {
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showShare, setShowShare] = useState(false);
+  const [faceShape, setFaceShape] = useState<string | null>(null);
 
   const runAnalysis = async (imageDataUrl: string) => {
     setLoading(true);
@@ -102,12 +107,15 @@ export default function ColorResultsPage() {
     if (!stored) { router.replace("/"); return; }
     setPhoto(stored);
     runAnalysis(stored);
+    setFaceShape(localStorage.getItem("mellow_face_shape"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (loading && photo) return <LoadingScreen photoSrc={photo} />;
   if (error) return <ErrorScreen message={error} onRetry={() => photo && runAnalysis(photo)} />;
   if (!analysis || !photo) return null;
+
+  const scannedFaceShape = faceShape ?? analysis.hair?.faceShape ?? null;
 
   const chunk = <T,>(arr: T[], n: number): T[][] =>
     Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
@@ -121,12 +129,26 @@ export default function ColorResultsPage() {
   return (
     <div className="min-h-screen bg-cream pb-24">
 
+      {showShare && (
+        <ShareCard
+          season={analysis.season}
+          undertone={analysis.undertone}
+          bestColors={analysis.bestColors ?? []}
+          seasonalPalette={analysis.seasonalPalette ?? []}
+          faceShape={scannedFaceShape}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+
       <nav className="print:hidden flex items-center justify-between px-6 md:px-12 py-5">
         <button onClick={() => router.push("/")} className="flex items-center gap-2 text-brown-mid hover:text-brown-dark transition-colors">
           <ArrowLeft className="w-4 h-4" strokeWidth={1.5} />
           <span className="font-sans text-xs tracking-widest uppercase">New Analysis</span>
         </button>
         <span className="font-display text-2xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>mellow</span>
+        <button onClick={() => router.push("/results/hub")} className="font-sans text-xs tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors">
+          Dashboard
+        </button>
       </nav>
 
       <div className="max-w-4xl mx-auto px-4 md:px-8 space-y-5">
@@ -280,18 +302,25 @@ export default function ColorResultsPage() {
 
         <motion.div {...fade(0.58)} className="print:hidden flex gap-3">
           <button
+            onClick={() => setShowShare(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
+          >
+            <Share2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+            Colour Card
+          </button>
+          <button
             onClick={() => window.print()}
             className="flex-1 flex items-center justify-center gap-2 py-3 border border-brown-light/40 rounded-xl text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors font-sans text-xs tracking-widest uppercase"
           >
             <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
-            This Page
+            Print Page
           </button>
           <button
             onClick={() => router.push("/results/print")}
             className="flex-1 flex items-center justify-center gap-2 py-3 bg-brown-dark text-cream rounded-xl hover:bg-brown-mid transition-colors font-sans text-xs tracking-widest uppercase"
           >
             <Download className="w-3.5 h-3.5" strokeWidth={1.5} />
-            All 4 Pages
+            All 4
           </button>
         </motion.div>
 

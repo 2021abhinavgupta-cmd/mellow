@@ -18,6 +18,15 @@ export const metadata: Metadata = {
   title: "mellow — Personal Style AI",
   description:
     "Discover your natural radiance with personalised colour, makeup, hair, and style analysis.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "mellow",
+  },
+  icons: {
+    icon: "/icon-192.png",
+    apple: "/icon-192.png",
+  },
 };
 
 export const viewport: Viewport = {

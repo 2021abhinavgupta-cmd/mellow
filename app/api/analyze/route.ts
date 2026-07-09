@@ -212,7 +212,14 @@ const BASE_SCHEMA = `
     "fabrics": ["3 flattering fabric types e.g. Chiffon, Satin"],
     "avoid": ["4 things to avoid and why"],
     "outfitFormula": "e.g. Fitted top + High-waist bottom + Open jacket + Minimal accessories",
-    "quickTips": ["3 practical style tips"]
+    "quickTips": ["3 practical style tips"],
+    "jewellery": {
+      "bestMetals": ["2–3 metals e.g. 22k Gold, Rose Gold — for males: Gold chain, Steel watch"],
+      "neckStyles": ["3 necklace/chain styles that suit their neckline and face — for males: e.g. Thin gold chain, Dog tag"],
+      "earringStyles": ["3 earring styles — for males: e.g. Stud only, Skip if not applicable"],
+      "banglesAndBracelets": ["2 bangle/bracelet styles — for males: e.g. Leather cuff, Steel bracelet"],
+      "tip": "1 sentence: overall jewellery direction for their season and colouring"
+    }
   }
 }`;
 
@@ -245,7 +252,7 @@ export async function POST(req: NextRequest) {
               ],
             },
           ],
-          max_tokens: 5000,
+          max_tokens: 5500,
         });
         const content = response.choices[0].message.content ?? "{}";
         return Response.json(JSON.parse(content));
