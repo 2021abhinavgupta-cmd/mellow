@@ -3,6 +3,35 @@ export interface NamedSwatch {
   hex: string;
 }
 
+export interface SkinConcern {
+  severity: "none" | "mild" | "moderate" | "significant";
+  notes: string;
+}
+
+export interface SkinAnalysis {
+  overallCondition: string;
+  skinType: string;
+  concerns: {
+    pores: SkinConcern;
+    acne: SkinConcern;
+    darkSpots: SkinConcern;
+    texture: SkinConcern;
+    darkCircles: SkinConcern;
+    redness: SkinConcern;
+    oiliness: SkinConcern;
+  };
+  positives: string[];
+  recommendations: string[];
+  routine: {
+    morning: string[];
+    evening: string[];
+  };
+  ingredients: {
+    use: string[];
+    avoid: string[];
+  };
+}
+
 export interface ColorAnalysis {
   season: string;
   seasonDescription: string;

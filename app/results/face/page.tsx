@@ -295,17 +295,27 @@ export default function FacePage() {
           </Card>
         </motion.div>
 
-        {/* Back to Style Guide */}
+        {/* CTA: Skin Analysis */}
         <motion.div {...fade(0.25)}>
           <button
-            onClick={() => router.push("/results/style")}
+            onClick={() => router.push("/skin-scan")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
           >
             <div className="text-left">
-              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Back to</p>
-              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Your Style Guide</p>
+              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Next</p>
+              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Skin Analysis</p>
             </div>
             <ArrowRight className="w-5 h-5 text-cream/70 group-hover:translate-x-1 transition-transform" strokeWidth={1.5} />
+          </button>
+        </motion.div>
+
+        {/* Back to Style Guide */}
+        <motion.div {...fade(0.30)}>
+          <button
+            onClick={() => router.push("/results/style")}
+            className="w-full py-3 border border-brown-light/40 rounded-xl font-sans text-xs tracking-widest uppercase text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors"
+          >
+            Back to Style Guide
           </button>
         </motion.div>
       </div>

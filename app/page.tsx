@@ -133,6 +133,7 @@ export default function Home() {
   const analyze = useCallback(() => {
     if (!image || !gender) return;
     localStorage.removeItem("mellow_analysis");
+    localStorage.removeItem("mellow_skin_analysis");
     sessionStorage.removeItem("mellow_hair_images");
     sessionStorage.removeItem("mellow_style_images");
     localStorage.setItem("mellow_image", image);
