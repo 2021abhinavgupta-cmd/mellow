@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, CheckCircle2, XCircle, Sparkles, X, Download } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Sparkles, X, Download } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 import { GeneratingScreen } from "@/app/components/GeneratingScreen";
 import { styleImageCache } from "@/app/lib/imageCache";
@@ -481,6 +481,20 @@ export default function StyleResultsPage() {
               ))}
             </div>
           </Card>
+        </motion.div>
+
+        {/* ── CTA: FACE SHAPE GUIDE ── */}
+        <motion.div {...fade(0.50)} className="print:hidden">
+          <button
+            onClick={() => router.push("/results/face")}
+            className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
+          >
+            <div className="text-left">
+              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Next</p>
+              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Your Face Shape Guide</p>
+            </div>
+            <ArrowRight className="w-5 h-5 text-cream/70 group-hover:translate-x-1 transition-transform" strokeWidth={1.5} />
+          </button>
         </motion.div>
 
         <motion.div {...fade(0.54)} className="print:hidden flex gap-3">
