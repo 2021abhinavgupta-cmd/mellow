@@ -8,6 +8,18 @@ import dynamic from "next/dynamic";
 
 const FaceScanner = dynamic(() => import("@/app/components/FaceScanner"), { ssr: false });
 
+const FACE_SHAPE_BLURB: Record<string, string> = {
+  "Oval":               "Balanced proportions — forehead slightly wider than jaw, gently rounded chin.",
+  "Round":              "Soft, full cheeks with similar face length and width. Gentle, curved jawline.",
+  "Square":             "Strong, angular jaw roughly as wide as the forehead. Defined, structured look.",
+  "Heart":              "Wide forehead and prominent cheekbones tapering to a narrow, pointed chin.",
+  "Long":               "Face notably longer than wide, with similar forehead, cheekbone, and jaw width.",
+  "Diamond":            "Wide cheekbones are the widest point — forehead and jaw both narrow.",
+  "Rectangle":          "Long face with an angular jaw as wide as the forehead. Structured, strong.",
+  "Triangle":           "Jaw wider than cheekbones and forehead — face widens toward the chin.",
+  "Inverted Triangle":  "Wide forehead and temples tapering down to a narrow jaw and chin.",
+};
+
 const features = [
   {
     icon: Palette,
@@ -309,6 +321,11 @@ export default function Home() {
                   <p className="font-display text-4xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
                     {faceShape}
                   </p>
+                  {FACE_SHAPE_BLURB[faceShape] && (
+                    <p className="font-sans text-xs text-brown-mid/70 mt-2 max-w-[220px] mx-auto leading-relaxed">
+                      {FACE_SHAPE_BLURB[faceShape]}
+                    </p>
+                  )}
                 </div>
               )}
 
