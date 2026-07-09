@@ -170,8 +170,7 @@ export default function FacePage() {
   const detected = FACE_SHAPES.find(s => faceShape && s.name.toLowerCase() === faceShape.toLowerCase())
     ?? (faceShape ? { name: faceShape, traits: [], tip: "" } : null);
 
-  // Primary shapes shown in the reference grid (the 6 most common)
-  const GRID_SHAPES = ["Oval", "Round", "Square", "Heart", "Long", "Diamond"];
+  const GRID_SHAPES = FACE_SHAPES.map(s => s.name);
 
   return (
     <div className="min-h-screen bg-cream pb-16">
@@ -263,20 +262,6 @@ export default function FacePage() {
               })}
             </div>
 
-            {/* Show less common shape if detected */}
-            {faceShape && !GRID_SHAPES.some(s => s.toLowerCase() === faceShape.toLowerCase()) && (
-              <div className="mt-4 pt-4 border-t border-brown-light/20">
-                <p className="font-sans text-[0.58rem] tracking-[0.2em] uppercase text-brown-mid mb-3">Your shape</p>
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-20 flex-shrink-0">
-                    <FaceOutline shape={faceShape} active={true} />
-                  </div>
-                  <p className="font-sans text-sm text-brown-dark" style={{ fontStyle: "italic" }}>
-                    {faceShape}
-                  </p>
-                </div>
-              </div>
-            )}
           </Card>
         </motion.div>
 
@@ -285,7 +270,7 @@ export default function FacePage() {
           <Card>
             <SectionLabel>Shape guide</SectionLabel>
             <div className="space-y-4">
-              {FACE_SHAPES.slice(0, 6).map((s) => {
+              {FACE_SHAPES.map((s) => {
                 const isMatch = faceShape?.toLowerCase() === s.name.toLowerCase();
                 return (
                   <div
