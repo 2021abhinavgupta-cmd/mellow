@@ -108,6 +108,7 @@ export default function HairResultsPage() {
   const [genTotal, setGenTotal] = useState(3);
   const [hairImages, setHairImages] = useState<Record<string, string | null>>({});
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [scannedFaceShape, setScannedFaceShape] = useState<string | null>(null);
 
   const generateImages = useCallback(async (imageDataUrl: string, h: ColorAnalysis["hair"]) => {
     // Never throw — image generation failure must not crash the page
@@ -161,7 +162,7 @@ export default function HairResultsPage() {
           genderNote,
           `MUST keep IDENTICAL: face, skin tone, eyes, nose, lips, expression, clothing, background.`,
           `ONLY change: hair length, texture, layering, styling.`,
-          `Person has ${h.faceShape} face and ${h.observedHairType} hair naturally.`,
+          `Person has ${scannedFaceShape ?? h.faceShape} face and ${h.observedHairType} hair naturally.`,
           `Conservative minimal edit — same person, different hairstyle only.`,
         ].join(" ");
 
@@ -222,6 +223,8 @@ export default function HairResultsPage() {
     const stored = localStorage.getItem("mellow_image");
     if (!stored) { router.replace("/"); return; }
     setPhoto(stored);
+    const sf = localStorage.getItem("mellow_face_shape");
+    if (sf) setScannedFaceShape(sf);
     runAnalysis(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -299,8 +302,13 @@ export default function HairResultsPage() {
               className="font-display text-5xl sm:text-6xl text-brown-dark leading-tight"
               style={{ fontStyle: "italic", fontWeight: 300 }}
             >
-              {h.faceShape}
+              {scannedFaceShape ?? h.faceShape}
             </h1>
+            {scannedFaceShape && scannedFaceShape !== h.faceShape && (
+              <p className="font-sans text-[0.56rem] tracking-widest uppercase text-brown-mid/60 mt-1">
+                Detected by face scan
+              </p>
+            )}
             <p className="font-sans text-[0.58rem] tracking-[0.2em] uppercase text-brown-mid mt-1.5 mb-3">
               {h.observedHairType}
             </p>
