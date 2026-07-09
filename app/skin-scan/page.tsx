@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -8,15 +8,21 @@ import dynamic from "next/dynamic";
 const SkinScanner = dynamic(() => import("@/app/components/SkinScanner"), { ssr: false });
 
 export default function SkinScanPage() {
-  const router = useRouter();
-  const [scanning, setScanning] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router        = useRouter();
+  const [scanning,   setScanning]   = useState(false);
+  const [analyzing,  setAnalyzing]  = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
+  const controllerRef = useRef<AbortController | null>(null);
 
   const handleCapture = useCallback(async (imageDataUrl: string) => {
     setScanning(false);
     setAnalyzing(true);
     setError(null);
+
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    // Server maxDuration is 60s — abort client-side at 55s so error surfaces cleanly
+    const timeoutId = setTimeout(() => controller.abort(), 55000);
 
     try {
       const cached = localStorage.getItem("mellow_skin_analysis");
@@ -25,17 +31,31 @@ export default function SkinScanPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageDataUrl }),
+          signal: controller.signal,
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);
         localStorage.setItem("mellow_skin_analysis", JSON.stringify(data));
       }
+      clearTimeout(timeoutId);
+      controllerRef.current = null;
       router.push("/results/skin");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Analysis failed");
+      clearTimeout(timeoutId);
+      controllerRef.current = null;
+      const msg = e instanceof Error
+        ? (e.name === "AbortError" ? "Analysis timed out — please try again" : e.message)
+        : "Analysis failed";
+      setError(msg);
       setAnalyzing(false);
     }
   }, [router]);
+
+  const handleCancel = useCallback(() => {
+    controllerRef.current?.abort();
+    controllerRef.current = null;
+    setAnalyzing(false);
+  }, []);
 
   if (scanning) {
     return (
@@ -64,6 +84,12 @@ export default function SkinScanPage() {
           <p className="font-sans text-xs text-brown-mid tracking-widest">
             Reading texture, tone, and concerns
           </p>
+          <button
+            onClick={handleCancel}
+            className="font-sans text-xs text-brown-mid/50 tracking-widest uppercase hover:text-brown-mid transition-colors pt-2"
+          >
+            Cancel
+          </button>
         </motion.div>
       ) : error ? (
         <div className="text-center space-y-4">

@@ -168,7 +168,7 @@ export default function SkinPage() {
               {(analysis.recommendations ?? []).map((r, i) => (
                 <li key={i} className="flex gap-3 font-sans text-xs text-brown-dark leading-snug">
                   <span className="font-sans text-[0.6rem] tracking-widest text-brown-mid flex-shrink-0 mt-0.5">
-                    0{i + 1}
+                    {String(i + 1).padStart(2, "0")}
                   </span>
                   {r}
                 </li>
@@ -251,15 +251,15 @@ export default function SkinPage() {
           </button>
         </motion.div>
 
-        {/* CTA: Colour Analysis */}
+        {/* CTA: Back to start */}
         <motion.div {...fade(0.40)}>
           <button
-            onClick={() => router.push("/results")}
+            onClick={() => router.push("/")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
           >
             <div className="text-left">
-              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Next</p>
-              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Colour Analysis</p>
+              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Done</p>
+              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Start Over</p>
             </div>
             <ArrowRight className="w-5 h-5 text-cream/70 group-hover:translate-x-1 transition-transform" strokeWidth={1.5} />
           </button>

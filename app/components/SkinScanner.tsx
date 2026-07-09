@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const WASM_URL  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-const HOLD_MS = 4000; // ms of steady hold required
+const HOLD_MS = 4000;
 
 type Status = "instructions" | "loading" | "scanning" | "done" | "error";
 
@@ -17,22 +17,22 @@ interface Props {
 }
 
 export default function SkinScanner({ onCapture, onClose }: Props) {
-  const videoRef    = useRef<HTMLVideoElement>(null);
-  const canvasRef   = useRef<HTMLCanvasElement>(null);
+  const videoRef      = useRef<HTMLVideoElement>(null);
+  const canvasRef     = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<import("@mediapipe/tasks-vision").FaceLandmarker | null>(null);
-  const streamRef   = useRef<MediaStream | null>(null);
-  const rafRef      = useRef<number>(0);
-  const holdStart   = useRef<number | null>(null);
-  const capturedRef = useRef(false);
+  const streamRef     = useRef<MediaStream | null>(null);
+  const rafRef        = useRef<number>(0);
+  const holdStart     = useRef<number | null>(null);
+  const capturedRef   = useRef(false);
+  const holdPctRef    = useRef(0); // mirrors holdPct state for canvas loop (avoids stale closure)
 
-  const [status,      setStatus]      = useState<Status>("instructions");
-  const [loadKey,     setLoadKey]     = useState(0);
-  const [holdPct,     setHoldPct]     = useState(0);
-  const [faceInView,  setFaceInView]  = useState(false);
-  const [tooFar,      setTooFar]      = useState(false);
-  const [error,       setError]       = useState<string | null>(null);
+  const [status,     setStatus]     = useState<Status>("instructions");
+  const [loadKey,    setLoadKey]    = useState(0);
+  const [holdPct,    setHoldPct]    = useState(0);
+  const [faceInView, setFaceInView] = useState(false);
+  const [tooFar,     setTooFar]     = useState(false);
+  const [error,      setError]      = useState<string | null>(null);
 
-  // ── Instructions ────────────────────────────────────────────────────────────
   const TIPS = [
     "Move close — your face should fill most of the frame",
     "Find a spot with bright, even, natural light (face a window)",
@@ -63,7 +63,6 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
         if (cancelled) { landmarker.close(); return; }
         landmarkerRef.current = landmarker;
 
-        // Portrait-biased dimensions (matches FaceScanner)
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: "user", width: { ideal: 480 }, height: { ideal: 640 } },
         });
@@ -79,6 +78,7 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
         setStatus("scanning");
         capturedRef.current = false;
         holdStart.current = null;
+        holdPctRef.current = 0;
         startLoop();
       } catch (e) {
         if (!cancelled) {
@@ -107,56 +107,81 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
         const lm = result?.faceLandmarks?.[0];
         const mx = result?.facialTransformationMatrixes?.[0];
 
+        // ── Derive face position + pose (requires lm) ──────────────────────
+        let steady  = false;
+        let far     = false;
+        let faceCx  = W / 2;
+        let faceCy  = H * 0.46;
+
+        if (lm && mx) {
+          // iPhone portrait fix — same 3-part correction as FaceScanner
+          const devicePortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+          const videoRotated   = W > H && devicePortrait;
+          const applyRot       = (lms: typeof lm) => videoRotated
+            ? lms.map(p => ({ x: p.y, y: 1 - p.x, z: p.z }))
+            : lms;
+          const lmC = applyRot(lm);
+          const mW  = videoRotated ? H : W;
+          const mH  = videoRotated ? W : H;
+
+          // Face center for canvas overlay — raw lm coords map to raw video pixel space
+          faceCx = (lm[234].x + lm[454].x) / 2 * W;
+          faceCy = (lm[10].y  + lm[152].y) / 2 * H;
+
+          // Close-up check (stricter than FaceScanner)
+          const cheekW     = Math.sqrt(
+            ((lmC[234].x - lmC[454].x) * mW) ** 2 +
+            ((lmC[234].y - lmC[454].y) * mH) ** 2
+          );
+          far = cheekW / mW < 0.20;
+
+          // Pose — very frontal required for skin detail
+          const data     = mx.data;
+          const rawYaw   = Math.atan2(data[1], data[5]);
+          const rawPitch = Math.atan2(-data[2], Math.sqrt(data[6] ** 2 + data[10] ** 2));
+          const { yaw, pitch } = videoRotated
+            ? { yaw: rawPitch, pitch: -rawYaw }
+            : { yaw: rawYaw, pitch: rawPitch };
+
+          steady = Math.abs(yaw) < 0.10 && Math.abs(pitch) < 0.12 && !far;
+        }
+
+        // ── Canvas draw — always runs so oval shows even when no face ──────
+        ctx.clearRect(0, 0, W, H);
+        const rx = W * 0.36, ry = H * 0.44;
+        ctx.beginPath();
+        ctx.ellipse(faceCx, faceCy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = steady
+          ? `rgba(139,99,71,${0.5 + holdPctRef.current * 0.5})`
+          : lm
+            ? "rgba(139,99,71,0.5)"   // face detected, not yet steady
+            : "rgba(139,99,71,0.3)";  // no face — faint guide
+        ctx.lineWidth = 2;
+        ctx.setLineDash(steady ? [] : [8, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // ── No face ────────────────────────────────────────────────────────
         if (!lm || !mx) {
           setFaceInView(false);
           setTooFar(false);
           holdStart.current = null;
           setHoldPct(0);
+          holdPctRef.current = 0;
           rafRef.current = requestAnimationFrame(loop);
           return;
         }
 
         setFaceInView(true);
-
-        // Portrait rotation correction (same logic as FaceScanner)
-        const devicePortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-        const videoRotated = W > H && devicePortrait;
-
-        const applyRot = (lms: typeof lm) => videoRotated
-          ? lms.map(p => ({ x: p.y, y: 1 - p.x, z: p.z }))
-          : lms;
-
-        const lmC = applyRot(lm);
-        const mW = videoRotated ? H : W;
-        const mH = videoRotated ? W : H;
-
-        // Face size check
-        const cheekW = Math.sqrt(
-          ((lmC[234].x - lmC[454].x) * mW) ** 2 +
-          ((lmC[234].y - lmC[454].y) * mH) ** 2
-        );
-        const cheekWnorm = cheekW / mW;
-        const far = cheekWnorm < 0.20; // stricter than FaceScanner — want close-up
         setTooFar(far);
 
-        // Pose check — require very frontal for skin scan
-        const data = mx.data;
-        const rawYaw   = Math.atan2(data[1], data[5]);
-        const rawPitch = Math.atan2(-data[2], Math.sqrt(data[6] ** 2 + data[10] ** 2));
-        const { yaw, pitch } = videoRotated
-          ? { yaw: rawPitch, pitch: -rawYaw }
-          : { yaw: rawYaw, pitch: rawPitch };
-
-        const frontal = Math.abs(yaw) < 0.10 && Math.abs(pitch) < 0.12;
-        const steady  = frontal && !far;
-
-        // Hold timer
+        // ── Hold timer ─────────────────────────────────────────────────────
         const now = Date.now();
         if (steady) {
           if (holdStart.current === null) holdStart.current = now;
-          const elapsed = now - holdStart.current;
-          const pct = Math.min(elapsed / HOLD_MS, 1);
+          const pct = Math.min((now - holdStart.current) / HOLD_MS, 1);
           setHoldPct(pct);
+          holdPctRef.current = pct;
 
           if (pct >= 1 && !capturedRef.current) {
             capturedRef.current = true;
@@ -166,23 +191,8 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
         } else {
           holdStart.current = null;
           setHoldPct(0);
+          holdPctRef.current = 0;
         }
-
-        // Draw overlay on canvas — lightweight guide ring
-        ctx.clearRect(0, 0, W, H);
-
-        // Oval guide
-        const cx = W / 2, cy = H * 0.46;
-        const rx = W * 0.36, ry = H * 0.44;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        ctx.strokeStyle = steady
-          ? `rgba(139,99,71,${0.5 + holdPct * 0.5})`
-          : "rgba(139,99,71,0.3)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash(steady ? [] : [8, 6]);
-        ctx.stroke();
-        ctx.setLineDash([]);
 
         rafRef.current = requestAnimationFrame(loop);
       }
@@ -205,36 +215,31 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
 
   // ── Capture — crop face region for maximum skin detail ───────────────────
   function capture(video: HTMLVideoElement, lm: { x: number; y: number; z: number }[], W: number, H: number) {
-    // Bounding box: top=lm10, bottom=lm152, left=lm234, right=lm454
     const pad = 0.12;
-    const xs = lm.map(p => p.x);
-    const ys = lm.map(p => p.y);
-    const minX = Math.max(0, Math.min(...xs) - pad);
-    const maxX = Math.min(1, Math.max(...xs) + pad);
-    const minY = Math.max(0, Math.min(...ys) - pad);
-    const maxY = Math.min(1, Math.max(...ys) + pad);
+    const xs  = lm.map(p => p.x);
+    const ys  = lm.map(p => p.y);
+    const sx  = Math.max(0, Math.min(...xs) - pad) * W;
+    const sy  = Math.max(0, Math.min(...ys) - pad) * H;
+    const sw  = (Math.min(1, Math.max(...xs) + pad) - Math.max(0, Math.min(...xs) - pad)) * W;
+    const sh  = (Math.min(1, Math.max(...ys) + pad) - Math.max(0, Math.min(...ys) - pad)) * H;
 
-    const sx = minX * W, sy = minY * H;
-    const sw = (maxX - minX) * W, sh = (maxY - minY) * H;
-
-    // Upscale crop to 800px wide for more pixel detail
-    const outW = 800;
-    const outH = Math.round(sh * (outW / sw));
+    // Upscale crop to 800px wide for more pixel detail sent to GPT-4o
+    const outW      = 800;
+    const outH      = Math.round(sh * (outW / sw));
     const offscreen = document.createElement("canvas");
     offscreen.width  = outW;
     offscreen.height = outH;
     offscreen.getContext("2d")!.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
 
-    const dataUrl = offscreen.toDataURL("image/jpeg", 0.92);
     setStatus("done");
-    // Stop camera
     streamRef.current?.getTracks().forEach(t => t.stop());
-    onCapture(dataUrl);
+    onCapture(offscreen.toDataURL("image/jpeg", 0.92));
   }
 
   const handleRetry = useCallback(() => {
-    capturedRef.current = false;
-    holdStart.current = null;
+    capturedRef.current  = false;
+    holdStart.current    = null;
+    holdPctRef.current   = 0;
     setHoldPct(0);
     setFaceInView(false);
     setTooFar(false);
@@ -245,16 +250,16 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
 
   // ── Hint text ────────────────────────────────────────────────────────────
   function hint() {
-    if (tooFar) return "Move closer — fill the oval with your face";
-    if (!faceInView) return "Position your face inside the oval";
-    if (holdPct > 0) return `Hold still — ${Math.ceil((1 - holdPct) * HOLD_MS / 1000)}s`;
-    return "Face detected — hold still";
+    if (tooFar)       return "Move closer — face should fill the oval";
+    if (!faceInView)  return "Position face in oval — good lighting helps detection";
+    if (holdPct > 0)  return `Hold still — ${Math.ceil((1 - holdPct) * HOLD_MS / 1000)}s remaining`;
+    return "Face detected — hold perfectly still";
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 bg-cream flex flex-col">
-      {/* Close */}
+      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4">
         <span className="font-display text-xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
           Skin Scan
@@ -307,16 +312,14 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
             <video
               ref={videoRef}
               className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
-              playsInline
-              muted
-              autoPlay
+              playsInline muted autoPlay
             />
             <canvas
               ref={canvasRef}
               className="absolute inset-0 w-full h-full object-cover scale-x-[-1] pointer-events-none"
             />
 
-            {/* Hold progress ring overlay */}
+            {/* Hold progress ring */}
             {holdPct > 0 && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <svg viewBox="0 0 100 100" className="w-16 h-16">
@@ -340,12 +343,10 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
             )}
           </div>
 
-          {/* Hint */}
           <p className="font-sans text-xs text-brown-mid mt-4 tracking-wide text-center">
             {status === "scanning" ? hint() : "Loading…"}
           </p>
 
-          {/* Progress bar */}
           {holdPct > 0 && (
             <div className="mt-3 w-48 h-0.5 bg-brown-light/30 rounded-full overflow-hidden">
               <motion.div
@@ -354,6 +355,22 @@ export default function SkinScanner({ onCapture, onClose }: Props) {
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* Done — brief feedback before onCapture navigates away */}
+      {status === "done" && (
+        <div className="flex-1 flex items-center justify-center">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="text-center space-y-2"
+          >
+            <p className="font-display text-3xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
+              Captured
+            </p>
+            <p className="font-sans text-xs text-brown-mid tracking-widest">Analysing…</p>
+          </motion.div>
         </div>
       )}
 
