@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 
-// ── Face shape data ──────────────────────────────────────────────────────────
+// ── Face shape base data ─────────────────────────────────────────────────────
 
 const FACE_SHAPES = [
   {
@@ -55,8 +55,190 @@ const FACE_SHAPES = [
   },
 ];
 
+// ── Per-shape extras data ─────────────────────────────────────────────────────
+
+interface ShapeExtras {
+  glasses: { best: string[]; avoid: string };
+  earrings: { best: string[]; tip: string };
+  contour: { contour: string; highlight: string; blush: string };
+  bindi: { shape: string; placement: string };
+}
+
+const FACE_SHAPE_EXTRAS: Record<string, ShapeExtras> = {
+  Oval: {
+    glasses: {
+      best: ["Wayfarers", "Aviators", "Cat-eye", "Square frames"],
+      avoid: "Oversized round frames that hide your natural balance",
+    },
+    earrings: {
+      best: ["Hoops", "Long drops", "Chandbali", "Geometric studs"],
+      tip: "Most versatile shape — any silhouette works. Use earrings to express personality.",
+    },
+    contour: {
+      contour: "Minimal needed — light sculpting along temples if desired",
+      highlight: "Centre of forehead, nose bridge, cupid's bow, chin centre",
+      blush: "Apples of cheeks swept upward toward temples",
+    },
+    bindi: {
+      shape: "Round or teardrop — both flatter",
+      placement: "Centre of forehead between brows. Any size works; medium is ideal for everyday",
+    },
+  },
+  Round: {
+    glasses: {
+      best: ["Square frames", "Rectangle frames", "Wayfarers", "Angular shapes"],
+      avoid: "Round and circular frames — they echo the face shape and add width",
+    },
+    earrings: {
+      best: ["Long drops", "Linear dangles", "Tassel earrings", "Elongated hoops"],
+      tip: "Choose earrings that hang below the jaw to visually lengthen the face.",
+    },
+    contour: {
+      contour: "Along the sides of the face from temples to jaw and under cheekbones",
+      highlight: "Vertical strip down centre of forehead, nose bridge, and chin",
+      blush: "Diagonal sweep from cheek apples upward toward temples — avoid circular placement",
+    },
+    bindi: {
+      shape: "Elongated teardrop or vertical oval",
+      placement: "Centre of forehead, slightly higher than usual. Smaller to medium size preferred",
+    },
+  },
+  Square: {
+    glasses: {
+      best: ["Round frames", "Oval frames", "Cat-eye", "Rimless styles"],
+      avoid: "Square and angular frames — they amplify the strong jawline",
+    },
+    earrings: {
+      best: ["Hoops", "Oval drops", "Chandbali", "Teardrop earrings"],
+      tip: "Curved and rounded earring silhouettes soften angular jaw angles beautifully.",
+    },
+    contour: {
+      contour: "Under the jawline corners and along sides of face to soften angles",
+      highlight: "Centre of forehead, nose bridge, and centre of chin",
+      blush: "Diagonal sweep upward toward temples — creates visual softness",
+    },
+    bindi: {
+      shape: "Round or floral — soft shapes only",
+      placement: "Centre of forehead, medium size. Avoid geometric or angular bindi shapes",
+    },
+  },
+  Heart: {
+    glasses: {
+      best: ["Aviators", "Light rimless", "Round frames", "Bottom-heavy styles"],
+      avoid: "Cat-eye and top-heavy frames — they add unwanted width to the forehead",
+    },
+    earrings: {
+      best: ["Chandbali", "Wide teardrop drops", "Shoulder dusters", "Fan-shaped earrings"],
+      tip: "Earrings wider at the bottom balance the pointed chin and draw the eye down.",
+    },
+    contour: {
+      contour: "Along the forehead hairline at temples to minimise width",
+      highlight: "Chin centre and jaw area; nose bridge",
+      blush: "Low on the cheeks near the jaw, blended outward — not high on cheekbones",
+    },
+    bindi: {
+      shape: "Small to medium round or dot bindi",
+      placement: "Centre of forehead, slightly lower than usual. Avoid large bindis that widen forehead",
+    },
+  },
+  Long: {
+    glasses: {
+      best: ["Oversized frames", "Wide rectangle", "Aviators", "Deep frames"],
+      avoid: "Small and narrow frames — they elongate the face further",
+    },
+    earrings: {
+      best: ["Wide hoops", "Cluster studs", "Horizontal bar drops", "Button earrings"],
+      tip: "Width-adding earrings shorten the face visually. Avoid long vertical drops.",
+    },
+    contour: {
+      contour: "Along the forehead at hairline and the tip of the chin to shorten the face",
+      highlight: "Cheekbones horizontally to add width to the mid-face",
+      blush: "Sweep horizontally across cheeks from nose outward — avoid upward diagonal",
+    },
+    bindi: {
+      shape: "Wide horizontal oval or large round bindi",
+      placement: "Centre of forehead. Wider shapes add horizontal width and balance face length",
+    },
+  },
+  Diamond: {
+    glasses: {
+      best: ["Cat-eye", "Oval frames", "Rimless brow-line", "Curved styles"],
+      avoid: "Narrow rectangles — they emphasise the narrow forehead and chin",
+    },
+    earrings: {
+      best: ["Chandelier earrings", "Studs", "Small hoops", "Teardrop drops"],
+      tip: "Avoid earrings widest at the mid-point — frame the face rather than widen cheekbones.",
+    },
+    contour: {
+      contour: "Lightly along cheekbones to soften their prominence",
+      highlight: "Centre of forehead and chin to add width at the narrower points",
+      blush: "On the apples of the cheeks, blended softly",
+    },
+    bindi: {
+      shape: "Round or small floral bindi",
+      placement: "Centre of forehead between brows. Draws attention to the centre, balancing proportions",
+    },
+  },
+  Rectangle: {
+    glasses: {
+      best: ["Round frames", "Oval frames", "Oversized styles", "Deep cat-eye"],
+      avoid: "Narrow rectangle frames — they mirror the face shape",
+    },
+    earrings: {
+      best: ["Hoops", "Curved drops", "Chandbali", "Round cluster earrings"],
+      tip: "Rounded earring shapes add visual curves that contrast the angular face structure.",
+    },
+    contour: {
+      contour: "Sides of the forehead at temples and corners of the jaw to reduce length",
+      highlight: "Cheekbones horizontally; nose bridge",
+      blush: "Diagonal sweep across cheeks — creates width at the centre of the face",
+    },
+    bindi: {
+      shape: "Round or oval bindi, medium size",
+      placement: "Centre of forehead between brows. Adds a focal point and softens elongated proportions",
+    },
+  },
+  Triangle: {
+    glasses: {
+      best: ["Cat-eye frames", "Wide top-heavy styles", "Semi-rimless with decorative top"],
+      avoid: "Bottom-heavy frames that emphasise the wide jaw",
+    },
+    earrings: {
+      best: ["Chandelier drops", "Wide fan shapes", "Statement studs", "Cluster earrings with top detail"],
+      tip: "Earrings with volume at the top draw the eye upward and balance the wider jaw.",
+    },
+    contour: {
+      contour: "Along the sides of the jaw to reduce visual width",
+      highlight: "Centre of forehead and temples to widen the upper face",
+      blush: "High on cheekbones, swept upward — draws attention above the jaw",
+    },
+    bindi: {
+      shape: "Elongated teardrop or vertical oval",
+      placement: "Centre of forehead, slightly higher. Adds visual width to the upper face",
+    },
+  },
+  "Inverted Triangle": {
+    glasses: {
+      best: ["Round frames", "Aviators", "Bottom-rimmed styles", "Oval frames"],
+      avoid: "Cat-eye and top-heavy frames — they widen the forehead further",
+    },
+    earrings: {
+      best: ["Teardrop drops", "Wide chandbali", "Fan drops wider at base", "Shoulder dusters"],
+      tip: "Earrings wider at the bottom add visual weight to the narrow jaw and chin.",
+    },
+    contour: {
+      contour: "Lightly along the sides of the forehead to narrow the upper face",
+      highlight: "Jaw and chin area to add presence at the lower face",
+      blush: "Low on the cheeks near the jaw — adds fullness to the lower face",
+    },
+    bindi: {
+      shape: "Small round or dot bindi",
+      placement: "Centre of forehead. Keep small to avoid widening the forehead further",
+    },
+  },
+};
+
 // ── SVG face silhouettes ─────────────────────────────────────────────────────
-// All viewBox 0 0 60 80 — drawn as closed paths, stroke only
 
 function FaceOutline({ shape, active }: { shape: string; active: boolean }) {
   const stroke = active ? "#8B6347" : "rgba(139,99,71,0.35)";
@@ -154,23 +336,35 @@ const fade = (delay = 0) => ({
 export default function FacePage() {
   const router = useRouter();
   const [faceShape, setFaceShape] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<string | null>(null);
+  const [isMale, setIsMale] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("mellow_face_shape");
     if (stored) setFaceShape(stored);
     else {
-      // Fall back to GPT analysis if scanner wasn't used
       try {
         const analysis = JSON.parse(localStorage.getItem("mellow_analysis") ?? "{}");
         if (analysis?.hair?.faceShape) setFaceShape(analysis.hair.faceShape);
       } catch { /* ignore */ }
     }
+    setConfidence(localStorage.getItem("mellow_face_shape_confidence"));
+    setIsMale(localStorage.getItem("mellow_gender") === "male");
   }, []);
 
   const detected = FACE_SHAPES.find(s => faceShape && s.name.toLowerCase() === faceShape.toLowerCase())
     ?? (faceShape ? { name: faceShape, traits: [], tip: "" } : null);
 
+  const extras = faceShape ? FACE_SHAPE_EXTRAS[faceShape] ?? FACE_SHAPE_EXTRAS[
+    Object.keys(FACE_SHAPE_EXTRAS).find(k => k.toLowerCase() === faceShape.toLowerCase()) ?? ""
+  ] ?? null : null;
+
   const GRID_SHAPES = FACE_SHAPES.map(s => s.name);
+
+  const confidenceColor =
+    confidence === "High" ? "text-brown-mid" :
+    confidence === "Low" ? "text-brown-light" :
+    "text-brown-mid/60";
 
   return (
     <div className="min-h-screen bg-cream pb-16">
@@ -182,14 +376,20 @@ export default function FacePage() {
         >
           <ArrowLeft className="w-4 h-4 text-brown-dark" strokeWidth={1.5} />
         </button>
-        <p className="font-sans text-[0.58rem] tracking-[0.28em] uppercase text-brown-mid">Face Shape</p>
+        <p className="font-sans text-[0.58rem] tracking-[0.28em] uppercase text-brown-mid flex-1">Face Shape</p>
+        <button
+          onClick={() => router.push("/face-scan")}
+          className="font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors"
+        >
+          Rescan
+        </button>
       </div>
 
       <div className="max-w-xl mx-auto px-5 pt-8 space-y-6">
 
-        {/* Hero — detected shape */}
+        {/* Hero */}
         <motion.div {...fade(0)}>
-          <div className="text-center mb-6">
+          <div className="text-center mb-2">
             <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-brown-mid mb-1">Your face shape</p>
             <h1
               className="font-display text-5xl text-brown-dark"
@@ -197,12 +397,19 @@ export default function FacePage() {
             >
               {detected?.name ?? "—"}
             </h1>
+            {confidence && (
+              <p className={`font-sans text-[0.58rem] tracking-[0.2em] uppercase mt-2 ${confidenceColor}`}>
+                {confidence} confidence
+              </p>
+            )}
           </div>
+        </motion.div>
 
-          {detected && (
+        {/* Detected shape card */}
+        {detected && (
+          <motion.div {...fade(0.05)}>
             <Card>
               <div className="flex gap-5 items-start">
-                {/* Large silhouette */}
                 <div className="w-20 h-28 flex-shrink-0">
                   <FaceOutline shape={detected.name} active={true} />
                 </div>
@@ -224,10 +431,10 @@ export default function FacePage() {
                 </div>
               </div>
             </Card>
-          )}
-        </motion.div>
+          </motion.div>
+        )}
 
-        {/* Reference chart — all 6 common shapes */}
+        {/* All shapes grid */}
         <motion.div {...fade(0.1)}>
           <Card>
             <SectionLabel>All face shapes</SectionLabel>
@@ -261,11 +468,10 @@ export default function FacePage() {
                 );
               })}
             </div>
-
           </Card>
         </motion.div>
 
-        {/* Shape characteristics quick reference */}
+        {/* Shape guide list */}
         <motion.div {...fade(0.18)}>
           <Card>
             <SectionLabel>Shape guide</SectionLabel>
@@ -295,8 +501,108 @@ export default function FacePage() {
           </Card>
         </motion.div>
 
+        {/* ── NEW SECTIONS ── */}
+
+        {extras && (
+          <>
+            {/* Glasses frames */}
+            <motion.div {...fade(0.22)}>
+              <Card>
+                <SectionLabel>Glasses frames</SectionLabel>
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/60 mb-2">Best for you</p>
+                    <div className="flex flex-wrap gap-2">
+                      {extras.glasses.best.map((frame) => (
+                        <span
+                          key={frame}
+                          className="px-3 py-1 rounded-full bg-brown-light/15 font-sans text-xs text-brown-dark"
+                        >
+                          {frame}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-brown-light/15">
+                    <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/60 mb-1.5">Avoid</p>
+                    <p className="font-sans text-xs text-brown-mid/70 leading-snug">{extras.glasses.avoid}</p>
+                  </div>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Earring guide */}
+            <motion.div {...fade(0.26)}>
+              <Card>
+                <SectionLabel>Earring guide</SectionLabel>
+                <div className="space-y-4">
+                  <div>
+                    <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/60 mb-2">Flattering styles</p>
+                    <div className="flex flex-wrap gap-2">
+                      {extras.earrings.best.map((style) => (
+                        <span
+                          key={style}
+                          className="px-3 py-1 rounded-full bg-brown-light/15 font-sans text-xs text-brown-dark"
+                        >
+                          {style}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="font-sans text-xs text-brown-dark/70 leading-relaxed border-t border-brown-light/15 pt-3">
+                    {extras.earrings.tip}
+                  </p>
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Contour & blush */}
+            <motion.div {...fade(0.30)}>
+              <Card>
+                <SectionLabel>Contour & blush</SectionLabel>
+                <div className="space-y-3.5">
+                  {[
+                    { label: "Contour", value: extras.contour.contour },
+                    { label: "Highlight", value: extras.contour.highlight },
+                    { label: "Blush", value: extras.contour.blush },
+                  ].map(({ label, value }) => (
+                    <div key={label} className="flex gap-3">
+                      <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/50 w-16 flex-shrink-0 pt-0.5">{label}</p>
+                      <p className="font-sans text-xs text-brown-dark/75 leading-snug flex-1">{value}</p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </motion.div>
+
+            {/* Bindi guide — hidden for male users */}
+            {!isMale && (
+              <motion.div {...fade(0.34)}>
+                <Card>
+                  <div className="flex items-start justify-between mb-3">
+                    <SectionLabel>Bindi guide</SectionLabel>
+                    <span className="font-sans text-[0.52rem] tracking-widest uppercase text-brown-light bg-brown-light/10 rounded-full px-2 py-0.5 -mt-0.5">
+                      Indian style
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/50 w-16 flex-shrink-0 pt-0.5">Shape</p>
+                      <p className="font-sans text-xs text-brown-dark/75 leading-snug flex-1">{extras.bindi.shape}</p>
+                    </div>
+                    <div className="flex gap-3">
+                      <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/50 w-16 flex-shrink-0 pt-0.5">Placement</p>
+                      <p className="font-sans text-xs text-brown-dark/75 leading-snug flex-1">{extras.bindi.placement}</p>
+                    </div>
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+          </>
+        )}
+
         {/* CTA: Skin Analysis */}
-        <motion.div {...fade(0.25)}>
+        <motion.div {...fade(extras ? 0.38 : 0.25)}>
           <button
             onClick={() => router.push("/skin-scan")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
@@ -310,7 +616,7 @@ export default function FacePage() {
         </motion.div>
 
         {/* Back to Style Guide */}
-        <motion.div {...fade(0.30)}>
+        <motion.div {...fade(extras ? 0.42 : 0.30)}>
           <button
             onClick={() => router.push("/results/style")}
             className="w-full py-3 border border-brown-light/40 rounded-xl font-sans text-xs tracking-widest uppercase text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors"

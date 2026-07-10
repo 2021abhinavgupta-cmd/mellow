@@ -104,7 +104,7 @@ function avgBuffer(buf: M[]): M {
   };
 }
 
-function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): { shape: string; confident: boolean } {
+function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "female"): { shape: string; confidence: "High" | "Medium" | "Low" } {
   const { foreW, eyeW, cheekW, jawW, faceLen, chinW, jawAngle } = avg;
   const lenR  = faceLen / cheekW;
   const jawR  = jawW    / cheekW;
@@ -221,7 +221,8 @@ function classifyFromAvg(avg: M, debug = false, gender: "male" | "female" = "fem
   }
   const shape = winner[0][1] > 0 ? winner[0][0] : "Oval";
   const gap = winner[0][1] - (winner[1]?.[1] ?? 0);
-  return { shape, confident: gap > 3 };
+  const confidence: "High" | "Medium" | "Low" = gap >= 6 ? "High" : gap >= 3 ? "Medium" : "Low";
+  return { shape, confidence };
 }
 
 // ── Pose from 3D transformation matrix (column-major 4×4) ─────────────────
@@ -334,7 +335,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const [covered,             setCovered]             = useState<boolean[]>(Array(N_SEGS).fill(false));
   const [coveredCount,        setCoveredCount]        = useState(0);
   const [faceShape,           setFaceShape]           = useState<string | null>(null);
-  const [faceShapeConfident,  setFaceShapeConfident]  = useState(true);
+  const [faceShapeConfidence, setFaceShapeConfidence] = useState<"High" | "Medium" | "Low">("Medium");
   const [faceInView,          setFaceInView]          = useState(false);
   const [tooClose,            setTooClose]            = useState(false);
   const [tooFar,              setTooFar]              = useState(false);
@@ -346,7 +347,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const [pulseSeg,            setPulseSeg]            = useState<number | null>(null);
   const [skinToneResult,      setSkinToneResult]      = useState<SkinToneResult | null>(null);
 
-  const doCapture = useCallback((shape: string) => {
+  const doCapture = useCallback((shape: string, confidence: "High" | "Medium" | "Low") => {
     if (captured.current) return;
     captured.current = true;
     cancelAnimationFrame(raf.current);
@@ -364,6 +365,8 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       localStorage.setItem("mellow_skin_tone", JSON.stringify(tone));
       setSkinToneResult(tone);
     }
+
+    localStorage.setItem("mellow_face_shape_confidence", confidence);
 
     const img = frontalImg.current;
     if (img) { setStatus("done"); setTimeout(() => onCapture(img, shape), 800); return; }
@@ -392,7 +395,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
     setCovered(Array(N_SEGS).fill(false));
     setCoveredCount(0);
     setFaceShape(null);
-    setFaceShapeConfident(true);
+    setFaceShapeConfidence("Medium");
     setFaceInView(false);
     setTooClose(false);
     setTooFar(false);
@@ -517,7 +520,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
       if (measureBuf.current.length >= 8) {
         const live = classifyFromAvg(avgBuffer(measureBuf.current), false, gender);
         setFaceShape(live.shape);
-        setFaceShapeConfident(live.confident);
+        setFaceShapeConfidence(live.confidence);
       }
 
       // Time delta — capped at 100ms to avoid huge jumps after tab switch
@@ -553,8 +556,8 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
               if (count >= MIN_COVERED && measureBuf.current.length >= 8) {
                 const final = classifyFromAvg(avgBuffer(measureBuf.current), true, gender);
                 setFaceShape(final.shape);
-                setFaceShapeConfident(final.confident);
-                doCapture(final.shape);
+                setFaceShapeConfidence(final.confidence);
+                doCapture(final.shape, final.confidence);
               }
               return next;
             });
@@ -742,7 +745,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
                 {faceShape}
               </p>
               <p className="font-sans text-[0.55rem] tracking-[0.35em] uppercase text-brown-mid mt-1">
-                {faceShapeConfident ? "face shape detected" : "approximate result"}
+                {faceShapeConfidence === "High" ? "face shape detected" : faceShapeConfidence === "Medium" ? "approximate result" : "low confidence — try rescanning"}
               </p>
               {skinToneResult && (
                 <div className="flex items-center gap-2 mt-3">
