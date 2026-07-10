@@ -50,6 +50,7 @@ app/
     page.tsx              # Skin Scan entry: instructions → SkinScanner → POST /api/analyze-skin → /results/skin
   components/
     SkinScanner.tsx       # Close-up face scan for skin analysis (holds 4s, crops face region)
+    ShareCard.tsx         # Canvas 1080×1080 shareable PNG — import site must use dynamic(..., { ssr: false })
   api/
     analyze-skin/
       route.ts            # POST handler: receives cropped face image, calls GPT-4o/Gemini, returns SkinAnalysis JSON
@@ -62,9 +63,11 @@ app/
     style/
       page.tsx            # Style Guide page: body type, occasion tabs with AI outfit images, necklines, prints, outfit formula
     face/
-      page.tsx            # Face shape card + all-shapes reference chart; CTA → /skin-scan
+      page.tsx            # Face shape card + all-shapes reference chart; CTA → /skin-scan; `FACE_SHAPE_EXTRAS` lookup adds glasses/earrings/contour/bindi per shape; bindi hidden for male users
     skin/
       page.tsx            # Skin Analysis page: skin type, concerns severity bars, routine tabs, ingredients
+    hub/
+      page.tsx            # Dashboard: 7 analyses with completion status + progress bar; reads all localStorage keys at mount
     grooming/
       page.tsx            # PLANNED Sprint 4: men only — beard styles, skincare, fragrance (replaces makeup for men)
 ```
@@ -113,7 +116,7 @@ User selects photo (page.tsx)
   → "� Hair Styles" nav back to /results/hair
 
 Route handler (app/api/analyze/route.ts)
-  → GPT-4o vision (gpt-4o, response_format: json_object, max_tokens: 5000)
+  → GPT-4o vision (gpt-4o, response_format: json_object, max_tokens: 5500)
   → returns full ColorAnalysis JSON (colour + makeup + hair + style in one call)
 
 Route handler (app/api/generate-visuals/route.ts)
@@ -131,15 +134,16 @@ Route handler (app/api/generate-visuals/route.ts)
 | `mellow_analysis` | Stringified `ColorAnalysis` JSON | User uploads new photo |
 | `mellow_gender` | `"male"` or `"female"` | User uploads new photo |
 | `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | User uploads new photo |
+| `mellow_face_shape_confidence` | `"High"` / `"Medium"` / `"Low"` — classifier score gap ≥6/≥3/<3 | User uploads new photo |
 | `mellow_skin_tone` | `SkinToneResult` JSON — ITA, Fitzpatrick, Monk, hex, LAB | User uploads new photo |
 | `mellow_skin_analysis` | `SkinAnalysis` JSON — skin type, concerns, routine, recommendations | User runs new skin scan |
+| `mellow_body_type` | e.g. `"Hourglass"` — set when body scan complete; read by hub page | User uploads new photo |
 
-Planned additions (not yet built):
+Planned:
 
-| Key | Value | Sprint |
-|---|---|---|
-| `mellow_measurements` | `{ bust, waist, hips, unit }` JSON | Sprint 1 |
-| `mellow_body_type` | e.g. `"Hourglass"` — calculated client-side from measurements | Sprint 1 |
+| Key | Value |
+|---|---|
+| `mellow_measurements` | `{ bust, waist, hips, unit }` JSON |
 
 ### sessionStorage keys
 
@@ -157,6 +161,18 @@ localStorage quota is ~5MB per origin. Raw camera JPEGs passed through `FileRead
 ### OpenAI client
 
 Lazy-initialised inside `getClient()` in `route.ts` — not at module level — to avoid build-time crashes when `OPENAI_API_KEY` is undefined during static page generation.
+
+### PWA manifest
+
+`app/manifest.ts` exports `MetadataRoute.Manifest` — Next.js auto-serves at `/manifest.webmanifest`. Icons at `/public/icon-192.png` and `/public/icon-512.png` not yet created — browser handles gracefully, home-screen icon blank until added.
+
+### ShareCard (canvas PNG)
+
+`app/components/ShareCard.tsx` — modal + 1080×1080 canvas card. Must be imported with `dynamic(..., { ssr: false })` since canvas API unavailable in Node. Download via `canvas.toDataURL("image/png")` → `<a download>` click.
+
+### Extending ColorAnalysis schema
+
+New fields added to `route.ts` BASE_SCHEMA and `types.ts` **won't exist on cached analyses** in localStorage. Always guard rendering: `{analysis.newField && (...)}`. Users must re-upload photo to get new fields.
 
 ### Visual generation (generate-visuals route)
 
@@ -279,6 +295,7 @@ All under `style` object, displayed on `/results/style`:
 | `style.avoid` | string[4] — what to avoid and why |
 | `style.outfitFormula` | Single string: the go-to outfit template |
 | `style.quickTips` | string[3] — practical style tips |
+| `style.jewellery` | `{ bestMetals, neckStyles, earringStyles, banglesAndBracelets, tip }` — jewellery guide |
 
 The style page renders outfit categories (`everyday`/`office`/`occasional`) in a tab switcher with per-category styles + color swatches.
 
@@ -364,13 +381,13 @@ Heart requires ALL four conditions simultaneously: narrow jaw (`jawR < 0.60` for
 5. **Heart chin lower tier** — foreR threshold raised 0.87 → 0.89.
 6. **Frontal image quality** — `bestCenterScore` ref tracks lowest `|yaw|+|pitch|` frame; replaces frontalImg whenever a more-centered frame arrives. GPT-4o now receives truly front-facing photo, not first-frontal-frame (which can be at edge of frontal window).
 
-`onCapture(imageDataUrl, faceShape)` — skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` to localStorage before firing callback; callers read it from there.
+`onCapture(imageDataUrl, faceShape)` — confidence + skin tone NOT passed via arg. FaceScanner writes `mellow_skin_tone` + `mellow_face_shape_confidence` to localStorage (inside `doCapture`) before firing callback; callers read from there.
 
 `skinLabBuf` cap is 180 so samples accumulate across full scan duration.
 
 `gender: "male" | "female"` — required prop. `page.tsx` uses `pendingScanner` state to show a gender picker before launching the scanner (gender known at scan start, not after).
 
-`classifyFromAvg(avg, debug, gender)` — 3rd param required at both call sites (live display + final capture). Defaults to `"female"` but must be passed explicitly.
+`classifyFromAvg(avg, debug, gender)` — 3rd param required at both call sites (live display + final capture). Defaults to `"female"` but must be passed explicitly. Returns `{ shape: string; confidence: "High" | "Medium" | "Low" }` — confidence from score gap (≥6 High, ≥3 Medium, <3 Low). TypeScript return type annotation on function signature must match implementation or build fails.
 
 Gender-aware thresholds: males have more acute gonion angles by default, so `isAngular` cutoff is 1.72 rad (vs 1.80 female) and `isSoft` is 2.10 (vs 2.05) — avoids over-classifying male Oval as Square. Heart chin thresholds: male `0.40/0.43`, female `0.38/0.41`. Round requires `lenR < 1.15` for males vs 1.20 for females. Research confirms males have wider mandible (higher jawR → more Square/Rectangle tendency); females softer jaw (more Oval/Heart tendency).
 
