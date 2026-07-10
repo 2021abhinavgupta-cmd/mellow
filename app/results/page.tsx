@@ -286,15 +286,15 @@ export default function ColorResultsPage() {
           </div>
         </motion.div>
 
-        {/* ── CTA: MAKEUP PAGE ── */}
+        {/* ── CTA: HUB ── */}
         <motion.div {...fade(0.55)} className="print:hidden">
           <button
-            onClick={() => router.push("/results/makeup")}
+            onClick={() => router.push("/results/hub")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
           >
             <div className="text-left">
-              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Next</p>
-              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Your Makeup Analysis</p>
+              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">All done</p>
+              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>View All Your Results</p>
             </div>
             <ArrowRight className="w-5 h-5 text-cream/70 group-hover:translate-x-1 transition-transform" strokeWidth={1.5} />
           </button>
