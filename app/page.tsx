@@ -145,7 +145,7 @@ export default function Home() {
     } else {
       localStorage.removeItem("mellow_face_shape");
     }
-    router.push("/results");
+    router.push("/skin-scan");
   }, [image, gender, faceShape, router]);
 
   return (

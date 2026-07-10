@@ -33,7 +33,7 @@ export default function BodyScanPage() {
 
   const saveAndContinue = useCallback((shape: BodyShape) => {
     localStorage.setItem("mellow_body_type", shape);
-    router.push("/results/style");
+    router.push("/results");
   }, [router]);
 
   const handleMeasureSubmit = () => {
@@ -109,7 +109,7 @@ export default function BodyScanPage() {
             >
               <div className="text-center mb-8">
                 <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-brown-mid mb-1">
-                  Refine your
+                  Step 2 of 2 · Body Analysis
                 </p>
                 <h1
                   className="font-display text-4xl text-brown-dark"
@@ -174,7 +174,7 @@ export default function BodyScanPage() {
                 </button>
 
                 <button
-                  onClick={() => router.push("/results/style")}
+                  onClick={() => router.push("/results")}
                   className="w-full py-3 font-sans text-xs tracking-widest uppercase text-brown-mid/50 hover:text-brown-mid transition-colors"
                 >
                   Skip — use AI estimate

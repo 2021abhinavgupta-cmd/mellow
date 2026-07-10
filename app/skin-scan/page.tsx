@@ -39,7 +39,7 @@ export default function SkinScanPage() {
       }
       clearTimeout(timeoutId);
       controllerRef.current = null;
-      router.push("/results/skin");
+      router.push("/body-scan");
     } catch (e) {
       clearTimeout(timeoutId);
       controllerRef.current = null;
@@ -108,7 +108,7 @@ export default function SkinScanPage() {
         >
           <div>
             <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-brown-mid mb-2">
-              Skin Analysis
+              Step 1 of 2 · Skin Analysis
             </p>
             <h1 className="font-display text-4xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
               Scan Your Skin
