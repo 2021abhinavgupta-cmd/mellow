@@ -65,12 +65,23 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
 
 export default function ColorResultsPage() {
   const router = useRouter();
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [photo, setPhoto] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_image") : null
+  );
+  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(() => {
+    if (typeof window === "undefined") return null;
+    const cached = localStorage.getItem("mellow_analysis");
+    return cached ? (JSON.parse(cached) as ColorAnalysis) : null;
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !localStorage.getItem("mellow_analysis") || !localStorage.getItem("mellow_image");
+  });
   const [error, setError] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
-  const [faceShape, setFaceShape] = useState<string | null>(null);
+  const [faceShape, setFaceShape] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_face_shape") : null
+  );
 
   const runAnalysis = async (imageDataUrl: string) => {
     setLoading(true);
@@ -105,9 +116,8 @@ export default function ColorResultsPage() {
   useEffect(() => {
     const stored = localStorage.getItem("mellow_image");
     if (!stored) { router.replace("/"); return; }
-    setPhoto(stored);
-    runAnalysis(stored);
-    setFaceShape(localStorage.getItem("mellow_face_shape"));
+    if (!photo) setPhoto(stored);
+    if (!analysis) runAnalysis(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

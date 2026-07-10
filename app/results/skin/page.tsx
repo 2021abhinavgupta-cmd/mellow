@@ -96,7 +96,7 @@ export default function SkinPage() {
       {/* Nav */}
       <div className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-brown-light/20 px-5 py-3 flex items-center gap-3">
         <button
-          onClick={() => router.push("/results/face")}
+          onClick={() => router.back()}
           className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-brown-light/20 transition-colors"
         >
           <ArrowLeft className="w-4 h-4 text-brown-dark" strokeWidth={1.5} />
@@ -251,15 +251,15 @@ export default function SkinPage() {
           </button>
         </motion.div>
 
-        {/* CTA: Back to start */}
+        {/* CTA: Continue to body scan */}
         <motion.div {...fade(0.40)}>
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/body-scan")}
             className="w-full flex items-center justify-between px-6 py-4 bg-brown-dark text-cream rounded-2xl hover:bg-brown-mid transition-colors group"
           >
             <div className="text-left">
-              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Done</p>
-              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Start Over</p>
+              <p className="font-sans text-[0.6rem] tracking-[0.25em] uppercase text-cream/60 mb-0.5">Next · Step 2 of 2</p>
+              <p className="font-display text-xl" style={{ fontStyle: "italic", fontWeight: 300 }}>Body Analysis</p>
             </div>
             <ArrowRight className="w-5 h-5 text-cream/70 group-hover:translate-x-1 transition-transform" strokeWidth={1.5} />
           </button>

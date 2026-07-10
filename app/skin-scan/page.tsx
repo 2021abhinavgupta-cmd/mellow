@@ -39,7 +39,7 @@ export default function SkinScanPage() {
       }
       clearTimeout(timeoutId);
       controllerRef.current = null;
-      router.push("/body-scan");
+      router.push("/results/skin");
     } catch (e) {
       clearTimeout(timeoutId);
       controllerRef.current = null;
