@@ -8,7 +8,7 @@ import { classifyFromPose, type BodyShape } from "@/app/lib/bodyShape";
 const WASM_URL  = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm";
 const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
 
-const HOLD_MS = 2000;
+const HOLD_MS = 5000;
 
 // Key landmark indices (MediaPipe pose 33-point model)
 const LM_L_SHOULDER = 11;
@@ -24,7 +24,7 @@ const SEGMENTS = [
   [LM_L_HIP, LM_R_HIP],
 ] as const;
 
-type Status = "instructions" | "loading" | "scanning" | "done" | "error";
+type Status = "instructions" | "loading" | "countdown" | "scanning" | "done" | "error";
 
 interface Props {
   onCapture: (shape: BodyShape, confident: boolean) => void;
@@ -50,13 +50,14 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
   const [holdPct,     setHoldPct]     = useState(0);
   const [bodyInView,  setBodyInView]  = useState(false);
   const [error,       setError]       = useState<string | null>(null);
+  const [countdown,   setCountdown]   = useState(5);
 
   const TIPS = [
     "Stand 1.5–2 metres from camera so full body is visible",
     "Face camera directly — feet hip-width apart, arms relaxed",
     "Wear fitted clothing (not baggy) for accurate proportions",
     "Good lighting and a plain background help accuracy",
-    "Hold still for 2 seconds while scanning",
+    "Hold still for 5 seconds while scanning",
   ];
 
   // ── Init camera + MediaPipe PoseLandmarker ──────────────────────────────────
@@ -94,10 +95,19 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
         await video.play();
         if (cancelled) return;
 
-        setStatus("scanning");
+        // 5-second countdown before scanning
         capturedRef.current  = false;
         holdStart.current    = null;
         holdPctRef.current   = 0;
+        setStatus("countdown");
+        for (let i = 5; i >= 1; i--) {
+          if (cancelled) return;
+          setCountdown(i);
+          await new Promise<void>(r => setTimeout(r, 1000));
+        }
+        if (cancelled) return;
+
+        setStatus("scanning");
         startLoop();
       } catch (e) {
         if (!cancelled) {
@@ -293,7 +303,7 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
       </AnimatePresence>
 
       {/* Camera view */}
-      {(status === "loading" || status === "scanning") && (
+      {(status === "loading" || status === "countdown" || status === "scanning") && (
         <div className="flex-1 flex flex-col items-center justify-start pt-4 pb-8 px-4">
           <div className="relative w-full max-w-sm aspect-[3/4] rounded-3xl overflow-hidden bg-brown-dark/10">
             <video
@@ -328,10 +338,31 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
                 <p className="font-sans text-xs text-brown-mid tracking-widest">Starting camera…</p>
               </div>
             )}
+
+            {/* Countdown overlay */}
+            <AnimatePresence>
+              {status === "countdown" && (
+                <motion.div
+                  key={countdown}
+                  initial={{ opacity: 0, scale: 1.4 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  transition={{ duration: 0.25 }}
+                  className="absolute inset-0 flex flex-col items-center justify-center bg-brown-dark/50"
+                >
+                  <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-cream/70 mb-2">
+                    Get ready
+                  </p>
+                  <p className="font-display text-8xl text-cream" style={{ fontWeight: 300 }}>
+                    {countdown}
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           <p className="font-sans text-xs text-brown-mid mt-4 tracking-wide text-center">
-            {status === "scanning" ? hint() : "Loading…"}
+            {status === "scanning" ? hint() : status === "countdown" ? "Stand in position — scanning soon" : "Loading…"}
           </p>
 
           {holdPct > 0 && (
