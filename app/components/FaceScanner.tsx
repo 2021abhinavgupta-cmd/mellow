@@ -551,6 +551,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
               setCoveredCount(count);
               // Brief pulse on the newly completed segment
               setPulseSeg(seg);
+              if (typeof navigator !== "undefined") navigator.vibrate?.(40);
               if (pulseTimeout.current) clearTimeout(pulseTimeout.current);
               pulseTimeout.current = setTimeout(() => setPulseSeg(null), 500);
               if (count >= MIN_COVERED && measureBuf.current.length >= 8) {
@@ -768,51 +769,79 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
           )}
         </div>
 
-        {/* Ring SVG — only during scan */}
-        {status === "scanning" && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
-            {/* 40 tick dashes around the circle */}
-            {Array.from({ length: 40 }, (_, i) => {
-              const angle = (i / 40) * 2 * Math.PI - Math.PI / 2;
-              const seg = Math.floor((i / 40) * N_SEGS);
-              const isDone    = phase === "scan" && covered[seg];
-              const isPending = phase === "scan" && !covered[seg] && seg === activeSeg;
-              const isPulsing = isDone && seg === pulseSeg;
-              return (
-                <line
-                  key={i}
-                  x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
-                  x2={50 + (isPulsing ? 50 : 49) * Math.cos(angle)} y2={50 + (isPulsing ? 50 : 49) * Math.sin(angle)}
-                  stroke={
-                    isPulsing ? "#C9A882" :
-                    isDone    ? "#8B6347" :
-                    isPending ? `rgba(139,99,71,${(0.3 + 0.7 * activeSegPct).toFixed(2)})` :
-                    "rgba(201,168,130,0.45)"
-                  }
-                  strokeWidth={isPulsing ? "3" : "2"}
-                  strokeLinecap="round"
-                  style={{ transition: isDone ? "stroke 0.15s ease, stroke-width 0.15s ease" : "none" }}
-                />
-              );
-            })}
+        {/* Ring SVG — scanning + brief done flash */}
+        {(status === "scanning" || status === "done") && (() => {
+          const isDoneFlash = status === "done";
+          // Nearest uncovered segment to subtly highlight where user should turn next
+          const nextSeg = (() => {
+            if (phase !== "scan" || activeSeg === null) return null;
+            for (let d = 1; d <= N_SEGS; d++) {
+              const fwd = (activeSeg + d) % N_SEGS;
+              if (!covered[fwd]) return fwd;
+              const bwd = ((activeSeg - d) + N_SEGS) % N_SEGS;
+              if (!covered[bwd]) return bwd;
+            }
+            return null;
+          })();
+          return (
+            <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100">
+              {/* 40 tick dashes around the circle */}
+              {Array.from({ length: 40 }, (_, i) => {
+                const angle = (i / 40) * 2 * Math.PI - Math.PI / 2;
+                const seg = Math.floor((i / 40) * N_SEGS);
+                const isDone    = isDoneFlash || (phase === "scan" && covered[seg]);
+                const isPending = phase === "scan" && !covered[seg] && seg === activeSeg;
+                const isPulsing = (phase === "scan" && covered[seg] && seg === pulseSeg) || isDoneFlash;
+                const isNext    = phase === "scan" && !covered[seg] && seg === nextSeg;
+                return (
+                  <line
+                    key={i}
+                    x1={50 + 45 * Math.cos(angle)} y1={50 + 45 * Math.sin(angle)}
+                    x2={50 + (isPulsing ? 50 : 49) * Math.cos(angle)} y2={50 + (isPulsing ? 50 : 49) * Math.sin(angle)}
+                    stroke={
+                      isDoneFlash ? "#C9A882" :
+                      isPulsing   ? "#C9A882" :
+                      isDone      ? "#8B6347" :
+                      isNext      ? "rgba(139,99,71,0.65)" :
+                      isPending   ? `rgba(139,99,71,${(0.3 + 0.7 * activeSegPct).toFixed(2)})` :
+                      "rgba(201,168,130,0.45)"
+                    }
+                    strokeWidth={isPulsing ? "3" : isNext ? "2.5" : "2"}
+                    strokeLinecap="round"
+                    style={{ transition: isDone ? "stroke 0.15s ease, stroke-width 0.15s ease" : "none" }}
+                  />
+                );
+              })}
 
-            {/* Init phase: green arc fills as user holds frontal */}
-            {phase === "init" && faceInView && !tooClose && initPct > 0 && (
-              <circle
-                cx={50} cy={50} r={47}
-                fill="none"
-                stroke="#8B6347"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                pathLength={100}
-                strokeDasharray={100}
-                strokeDashoffset={100 - initPct * 100}
-                transform="rotate(-90 50 50)"
-                style={{ transition: "stroke-dashoffset 0.12s ease" }}
-              />
-            )}
-          </svg>
-        )}
+              {/* Init phase arc fills as user holds frontal */}
+              {phase === "init" && faceInView && !tooClose && initPct > 0 && (
+                <circle
+                  cx={50} cy={50} r={47}
+                  fill="none"
+                  stroke="#8B6347"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  pathLength={100}
+                  strokeDasharray={100}
+                  strokeDashoffset={100 - initPct * 100}
+                  transform="rotate(-90 50 50)"
+                  style={{ transition: "stroke-dashoffset 0.12s ease" }}
+                />
+              )}
+
+              {/* Moving dot — tracks current head direction on the ring */}
+              {phase === "scan" && faceInView && !tooClose && dotAngle !== null && (
+                <circle
+                  cx={50 + 47 * Math.cos(dotAngle)}
+                  cy={50 + 47 * Math.sin(dotAngle)}
+                  r={2.5}
+                  fill="#4A3728"
+                  opacity={0.85}
+                />
+              )}
+            </svg>
+          );
+        })()}
       </div>
 
       {/* Instruction text */}
@@ -843,8 +872,57 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
                   {Math.ceil((1 - initPct) * INIT_REQUIRED_MS / 1000)}s
                 </p>
               )}
+              {/* Live shape estimate during scan */}
+              {phase === "scan" && faceShape && (
+                <p className="mt-1 font-sans text-[0.55rem] tracking-[0.3em] text-brown-mid/35 uppercase">
+                  detecting {faceShape.toLowerCase()}
+                </p>
+              )}
             </motion.div>
           </AnimatePresence>
+
+          {/* Direction arrow nudge — animated arrow pointing toward next uncovered area */}
+          {phase === "scan" && faceInView && !tooClose && !tooFar && (() => {
+            const L = covered[5] || covered[6] || covered[7];
+            const R = covered[1] || covered[2] || covered[3];
+            const D = covered[3] || covered[4] || covered[5];
+            const dir = !R ? "right" : !L ? "left" : !D ? "down" : null;
+            if (!dir) return null;
+            return (
+              <motion.p
+                key={dir}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: [0.35, 0.75, 0.35] }}
+                transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" as const }}
+                className="mt-3 font-sans text-2xl text-brown-mid/50 select-none"
+              >
+                {dir === "right" ? "→" : dir === "left" ? "←" : "↓"}
+              </motion.p>
+            );
+          })()}
+
+          {/* Progress bar — fills left to right as scan progresses */}
+          {faceInView && !tooClose && !tooFar && (
+            <div className="mt-6 w-full">
+              <div className="h-[2px] bg-brown-light/25 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-brown-mid rounded-full"
+                  animate={{
+                    width: `${phase === "init"
+                      ? Math.round(initPct * 35)
+                      : Math.min(100, Math.round(35 + (coveredCount / MIN_COVERED) * 65))
+                    }%`
+                  }}
+                  transition={{ duration: 0.2, ease: "easeOut" as const }}
+                />
+              </div>
+              {phase === "scan" && (
+                <p className="mt-2 font-sans text-[0.55rem] tracking-[0.25em] text-brown-mid/40 text-center uppercase">
+                  {coveredCount} / {MIN_COVERED} positions
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 

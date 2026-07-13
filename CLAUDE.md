@@ -40,14 +40,14 @@ app/
   globals.css             # Tailwind v4 @theme inline — defines color + font tokens
   lib/
     types.ts              # Shared TypeScript interfaces: ColorAnalysis, NamedSwatch
-  page.tsx                # Landing page (client): drag-and-drop upload, canvas compression → localStorage → /results
+  page.tsx                # Landing page (client): FaceScanner scan → analyze() calls /api/analyze-skin inline → /results/skin
   api/
     analyze/
       route.ts            # POST handler: receives image data URL, calls GPT-4o vision, returns ColorAnalysis JSON
     generate-visuals/
       route.ts            # POST handler: takes photo + prompts[], calls gpt-image-1 images.edit, returns generated images
   skin-scan/
-    page.tsx              # Skin Scan entry: instructions → SkinScanner → POST /api/analyze-skin → /results/skin
+    page.tsx              # Skin Scan entry: "Scan Again" from hub only — NOT in mandatory new-user flow
   components/
     SkinScanner.tsx       # Close-up face scan for skin analysis (holds 4s, crops face region)
     ShareCard.tsx         # Canvas 1080×1080 shareable PNG — import site must use dynamic(..., { ssr: false })
@@ -70,6 +70,29 @@ app/
       page.tsx            # Dashboard: 7 analyses with completion status + progress bar; reads all localStorage keys at mount
     grooming/
       page.tsx            # PLANNED Sprint 4: men only — beard styles, skincare, fragrance (replaces makeup for men)
+```
+
+### Mandatory user flow
+
+```
+Landing page.tsx (FaceScanner captures face shape + photo)
+  → analyze() called on "Analyse My Style"
+  → clears mellow_analysis, mellow_skin_analysis, mellow_body_type, mellow_measurements, hair/style sessionStorage
+  → saves mellow_image, mellow_gender, mellow_face_shape to localStorage
+  → POST /api/analyze-skin (non-fatal — if fails, still navigates forward)
+  → router.push("/results/skin")
+
+/results/skin
+  → reads mellow_skin_analysis (if missing, redirects to /skin-scan)
+  → "Next · Step 2 of 2 → Body Analysis" CTA → /body-scan
+
+/body-scan
+  → measurements form OR BodyScanner camera
+  → saves mellow_body_type → router.push("/results")
+
+/results
+  → colour analysis (lazy state init reads localStorage synchronously — no loading flash on cache hit)
+  → /results/hub when complete
 ```
 
 ### Full data flow
@@ -136,7 +159,7 @@ Route handler (app/api/generate-visuals/route.ts)
 | `mellow_face_shape` | e.g. `"Oval"` — from MediaPipe landmark scan | User uploads new photo |
 | `mellow_face_shape_confidence` | `"High"` / `"Medium"` / `"Low"` — classifier score gap ≥6/≥3/<3 | User uploads new photo |
 | `mellow_skin_tone` | `SkinToneResult` JSON — ITA, Fitzpatrick, Monk, hex, LAB | User uploads new photo |
-| `mellow_skin_analysis` | `SkinAnalysis` JSON — skin type, concerns, routine, recommendations | User runs new skin scan |
+| `mellow_skin_analysis` | `SkinAnalysis` JSON — skin type, concerns, routine, recommendations | User uploads new photo OR runs rescan from hub |
 | `mellow_body_type` | e.g. `"Hourglass"` — set when body scan complete; read by hub page | User uploads new photo |
 
 Planned:
@@ -157,6 +180,10 @@ sessionStorage survives client-side navigation but resets on tab close. Used for
 ### Image compression (why it exists)
 
 localStorage quota is ~5MB per origin. Raw camera JPEGs passed through `FileReader` are 5–15MB as base64. The canvas compression step (max 1024px, JPEG 0.82) is mandatory — skipping it causes a `QuotaExceededError` on `localStorage.setItem`.
+
+### Avoiding localStorage loading flash
+
+Pages that read localStorage on mount must use lazy state initializers — `useState(() => localStorage.getItem(...))` — so initial state is correct on first render. Never set `loading: true` as initial value when a cache hit means loading is not needed. Pattern used in `app/results/page.tsx`.
 
 ### OpenAI client
 
