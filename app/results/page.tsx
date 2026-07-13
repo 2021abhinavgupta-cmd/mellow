@@ -97,10 +97,11 @@ export default function ColorResultsPage() {
       const gender = localStorage.getItem("mellow_gender") ?? "female";
       const skinToneRaw = localStorage.getItem("mellow_skin_tone");
       const skinTone = skinToneRaw ? JSON.parse(skinToneRaw) : undefined;
+      const ageRange = localStorage.getItem("mellow_age_range") ?? undefined;
       const res = await fetch("/api/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl, gender, skinTone }),
+        body: JSON.stringify({ imageDataUrl, gender, skinTone, ageRange }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? `API error ${res.status}`);

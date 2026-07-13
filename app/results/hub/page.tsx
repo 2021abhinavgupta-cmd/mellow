@@ -55,7 +55,9 @@ export default function HubPage() {
       localStorage.getItem("mellow_face_shape") ||
       analysis?.hair?.faceShape
     );
-    const hasSkin = !!localStorage.getItem("mellow_skin_analysis");
+    const faceConf = localStorage.getItem("mellow_face_shape_confidence");
+    const skinRaw = localStorage.getItem("mellow_skin_analysis");
+    const hasSkin = !!(() => { try { return skinRaw && JSON.parse(skinRaw)?.skinType; } catch { return false; } })();
     const hasBody = !!localStorage.getItem("mellow_body_type");
 
     const mods: Module[] = [
@@ -137,7 +139,7 @@ export default function HubPage() {
         key: "face",
         title: "Face Shape",
         subtitle: hasFaceShape
-          ? (localStorage.getItem("mellow_face_shape") ?? analysis?.hair?.faceShape ?? "Detected")
+          ? `${localStorage.getItem("mellow_face_shape") ?? analysis?.hair?.faceShape ?? "Detected"}${faceConf === "Low" ? " · Low confidence" : ""}`
           : "Scan for precise detection",
         path: hasFaceShape ? "/results/face" : "/face-scan",
         done: hasFaceShape,

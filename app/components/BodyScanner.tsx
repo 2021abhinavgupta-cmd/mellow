@@ -36,11 +36,12 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
   const canvasRef     = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<import("@mediapipe/tasks-vision").PoseLandmarker | null>(null);
   const streamRef     = useRef<MediaStream | null>(null);
-  const rafRef        = useRef<number>(0);
-  const holdStart     = useRef<number | null>(null);
-  const capturedRef   = useRef(false);
-  const holdPctRef    = useRef(0);
-  const onCaptureRef  = useRef(onCapture);
+  const rafRef            = useRef<number>(0);
+  const holdStart         = useRef<number | null>(null);
+  const capturedRef       = useRef(false);
+  const holdPctRef        = useRef(0);
+  const onCaptureRef      = useRef(onCapture);
+  const countdownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Always keep ref current so RAF loop sees latest callback without stale closure
   useEffect(() => { onCaptureRef.current = onCapture; }, [onCapture]);
@@ -103,7 +104,8 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
         for (let i = 5; i >= 1; i--) {
           if (cancelled) return;
           setCountdown(i);
-          await new Promise<void>(r => setTimeout(r, 1000));
+          await new Promise<void>(r => { countdownTimerRef.current = setTimeout(r, 1000); });
+          if (countdownTimerRef.current) { clearTimeout(countdownTimerRef.current); countdownTimerRef.current = null; }
         }
         if (cancelled) return;
 
@@ -120,6 +122,8 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
     function startLoop() {
       const video  = videoRef.current!;
       const canvas = canvasRef.current!;
+      const shoulderBuf: number[] = [];
+      const hipBuf:      number[] = [];
 
       function loop() {
         if (cancelled || capturedRef.current) return;
@@ -195,6 +199,8 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
           holdStart.current  = null;
           setHoldPct(0);
           holdPctRef.current = 0;
+          shoulderBuf.length = 0;
+          hipBuf.length      = 0;
           rafRef.current = requestAnimationFrame(loop);
           return;
         }
@@ -208,11 +214,16 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
         setHoldPct(pct);
         holdPctRef.current = pct;
 
+        // Accumulate measurements each frame for averaging
+        shoulderBuf.push(shoulderPx);
+        hipBuf.push(hipPx);
+
         if (pct >= 1 && !capturedRef.current) {
           capturedRef.current = true;
           setStatus("done");
           streamRef.current?.getTracks().forEach(t => t.stop());
-          const { shape, confident } = classifyFromPose(shoulderPx, hipPx);
+          const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+          const { shape, confident } = classifyFromPose(mean(shoulderBuf), mean(hipBuf));
           onCaptureRef.current(shape, confident);
           return;
         }
@@ -227,6 +238,7 @@ export default function BodyScanner({ onCapture, onClose }: Props) {
 
     return () => {
       cancelled = true;
+      if (countdownTimerRef.current) { clearTimeout(countdownTimerRef.current); countdownTimerRef.current = null; }
       cancelAnimationFrame(rafRef.current);
       streamRef.current?.getTracks().forEach(t => t.stop());
       landmarkerRef.current?.close();

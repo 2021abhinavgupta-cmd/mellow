@@ -61,7 +61,7 @@ Use these values to set the exact colour season, undertone, and season palette �
 `;
 }
 
-function buildSystemPrompt(gender: "male" | "female", skinTone?: SkinTonePayload) {
+function buildSystemPrompt(gender: "male" | "female", skinTone?: SkinTonePayload, ageRange?: string) {
   const isMale = gender === "male";
   const hairExamples = isMale
     ? "Textured Crop, Side Part, Pompadour, Fade, Crew Cut, Quiff, Slick Back, French Crop, Undercut, Buzz Cut"
@@ -72,6 +72,7 @@ function buildSystemPrompt(gender: "male" | "female", skinTone?: SkinTonePayload
 
   return `You are a professional personal colour, makeup, and style analyst specialising in seasonal colour theory.
 The person in this photo is ${isMale ? "MALE" : "FEMALE"}. Use this gender for ALL recommendations — never suggest styles for the opposite gender.
+${ageRange ? `AGE GROUP: ${ageRange} — calibrate ALL recommendations to this age range. Younger users (Under 25): trend-forward styles, bold experimenting. Mid-range (25–35): polished modern, versatile. (35–45): sophisticated, effortless. Mature (45+): elegant, refined, flattering cuts over trends. Adjust hairstyle maturity, makeup intensity, and clothing silhouette accordingly.` : ""}
 ${skinTone ? skinToneBlock(skinTone) : ""}
 
 HAIR — recommend only ${isMale ? "men's" : "women's"} hairstyles. Examples: ${hairExamples}.
@@ -304,8 +305,8 @@ GROOMING OBJECT (populate only when gender is MALE, set null for female):
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageDataUrl, gender, skinTone } = (await req.json()) as {
-      imageDataUrl: string; gender?: string; skinTone?: SkinTonePayload;
+    const { imageDataUrl, gender, skinTone, ageRange } = (await req.json()) as {
+      imageDataUrl: string; gender?: string; skinTone?: SkinTonePayload; ageRange?: string;
     };
 
     if (!imageDataUrl?.startsWith("data:image/")) {
@@ -313,7 +314,7 @@ export async function POST(req: NextRequest) {
     }
 
     const safeGender: "male" | "female" = gender === "male" ? "male" : "female";
-    const systemPrompt = buildSystemPrompt(safeGender, skinTone) + BASE_SCHEMA;
+    const systemPrompt = buildSystemPrompt(safeGender, skinTone, ageRange) + BASE_SCHEMA;
 
     // Try OpenAI first
     if (process.env.OPENAI_API_KEY) {
