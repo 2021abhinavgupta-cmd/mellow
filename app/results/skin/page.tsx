@@ -71,53 +71,98 @@ export default function SkinPage() {
     if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem("mellow_skin_analysis");
-      return raw ? (JSON.parse(raw) as SkinAnalysis) : null;
+      const parsed = raw ? (JSON.parse(raw) as SkinAnalysis) : null;
+      return parsed?.skinType ? parsed : null; // discard invalid cache
     } catch { return null; }
   });
   const [activeRoutine, setActiveRoutine] = useState<"morning" | "evening">("morning");
+  const [skinLoading, setSkinLoading] = useState(() =>
+    typeof window !== "undefined" ? !localStorage.getItem("mellow_skin_analysis") : false
+  );
+  const [skinError, setSkinError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (analysis) return;
-    router.replace("/skin-scan");
-  }, [analysis, router]);
+    if (analysis?.skinType) return;
+    const img = localStorage.getItem("mellow_image");
+    if (!img) { router.replace("/"); return; }
 
-  if (!analysis) return null;
+    setSkinLoading(true);
+    setSkinError(false);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55000);
 
-  // Empty/failed analysis — guide user to dedicated skin scan
-  if (!analysis.skinType) {
+    fetch("/api/analyze-skin", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageDataUrl: img }),
+      signal: controller.signal,
+    })
+      .then(async (res) => {
+        const data = await res.json();
+        if (res.ok && data.skinType) {
+          localStorage.setItem("mellow_skin_analysis", JSON.stringify(data));
+          setAnalysis(data as SkinAnalysis);
+        } else {
+          setSkinError(true);
+        }
+      })
+      .catch(() => setSkinError(true))
+      .finally(() => {
+        clearTimeout(timeout);
+        setSkinLoading(false);
+      });
+
+    return () => { controller.abort(); clearTimeout(timeout); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, retryCount]);
+
+  if (skinLoading) {
     return (
-      <div className="min-h-screen bg-cream pb-16">
-        <div className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-brown-light/20 px-5 py-3 flex items-center gap-3">
-          <button
-            onClick={() => router.back()}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-brown-light/20 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4 text-brown-dark" strokeWidth={1.5} />
-          </button>
-          <p className="font-sans text-[0.58rem] tracking-[0.28em] uppercase text-brown-mid">Skin Analysis</p>
-        </div>
-        <div className="max-w-xl mx-auto px-5 pt-16 space-y-5 text-center">
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <h1 className="font-display text-4xl text-brown-dark mb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
-              Skin scan needed
-            </h1>
-            <p className="font-sans text-sm text-brown-mid mb-8 leading-relaxed max-w-xs mx-auto">
-              For accurate skin analysis, use the close-up skin scanner — it captures texture, pores, and concerns in detail.
-            </p>
-            <button
-              onClick={() => {
-                localStorage.removeItem("mellow_skin_analysis");
-                router.push("/skin-scan");
-              }}
-              className="px-6 py-3 bg-brown-dark text-cream rounded-xl font-sans text-xs tracking-widest uppercase hover:bg-brown-mid transition-colors"
-            >
-              Start Skin Scan
-            </button>
-          </motion.div>
+      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-8 px-6">
+        <motion.div
+          className="w-16 h-16 rounded-full border-2 border-brown-light"
+          animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.2, 0.6] }}
+          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" as import("framer-motion").Transition["ease"] }}
+        />
+        <div className="text-center">
+          <p className="font-display text-2xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
+            Analysing your skin…
+          </p>
+          <p className="font-sans text-xs text-brown-mid mt-2 tracking-widest">
+            Reading texture, tone &amp; concerns
+          </p>
         </div>
       </div>
     );
   }
+
+  if (skinError) {
+    return (
+      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-6 px-6 text-center">
+        <p className="font-display text-3xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
+          Couldn&apos;t analyse skin
+        </p>
+        <p className="font-sans text-sm text-brown-mid max-w-xs leading-relaxed">
+          Try again with good lighting and your full face visible.
+        </p>
+        <button
+          onClick={() => { setSkinError(false); setRetryCount(c => c + 1); }}
+          className="px-6 py-3 bg-brown-dark text-cream rounded-xl font-sans text-xs tracking-widest uppercase hover:bg-brown-mid transition-colors"
+        >
+          Try Again
+        </button>
+        <button
+          onClick={() => router.push("/skin-scan")}
+          className="font-sans text-xs text-brown-mid/60 hover:text-brown-mid transition-colors"
+        >
+          Use close-up scanner instead
+        </button>
+      </div>
+    );
+  }
+
+  if (!analysis) return null;
 
   const concerns = analysis.concerns ?? {};
   const concernKeys = Object.keys(CONCERN_META) as (keyof typeof CONCERN_META)[];

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, DragEvent, ChangeEvent, useEffect } from "react";
+import { useState, useCallback, useRef, DragEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Transition } from "framer-motion";
 import { Upload, Lock, Palette, Sparkles, Scissors, BookOpen, Camera } from "lucide-react";
@@ -61,11 +61,7 @@ export default function Home() {
   const [ageRange,     setAgeRange]     = useState<string | null>(null);
   const [fromScan,     setFromScan]     = useState(false);
   const [dragging,     setDragging]     = useState(false);
-  const [analyzing,    setAnalyzing]    = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const controllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => { controllerRef.current?.abort(); }, []);
 
   const compressImage = useCallback((dataUrl: string): Promise<string> =>
     new Promise((resolve) => {
@@ -136,7 +132,7 @@ export default function Home() {
     [handleFile]
   );
 
-  const analyze = useCallback(async () => {
+  const analyze = useCallback(() => {
     if (!image || !gender) return;
     localStorage.setItem("mellow_age_range", ageRange ?? "");
     localStorage.removeItem("mellow_face_shape_confidence");
@@ -153,50 +149,8 @@ export default function Home() {
     } else {
       localStorage.removeItem("mellow_face_shape");
     }
-
-    setAnalyzing(true);
-    const controller = new AbortController();
-    controllerRef.current = controller;
-    const timeoutId = setTimeout(() => controller.abort(), 55000);
-
-    try {
-      const res = await fetch("/api/analyze-skin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageDataUrl: image }),
-        signal: controller.signal,
-      });
-      const data = await res.json();
-      if (res.ok && data.skinType) localStorage.setItem("mellow_skin_analysis", JSON.stringify(data));
-    } catch {
-      // non-fatal — skin results page will handle missing data
-    } finally {
-      clearTimeout(timeoutId);
-      controllerRef.current = null;
-    }
-
     router.push("/results/skin");
   }, [image, gender, ageRange, faceShape, router]);
-
-  if (analyzing) {
-    return (
-      <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-8 px-6">
-        <motion.div
-          className="w-16 h-16 rounded-full border-2 border-brown-light"
-          animate={{ scale: [1, 1.15, 1], opacity: [0.6, 0.2, 0.6] }}
-          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" as Transition["ease"] }}
-        />
-        <div className="text-center">
-          <p className="font-display text-2xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-            Analysing your skin…
-          </p>
-          <p className="font-sans text-xs text-brown-mid mt-2 tracking-widest">
-            Reading texture, tone &amp; concerns
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <main className="min-h-screen bg-cream">

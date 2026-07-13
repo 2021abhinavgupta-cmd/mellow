@@ -22,17 +22,22 @@ const fade = (delay = 0) => ({
 
 export default function GroomingPage() {
   const router = useRouter();
-  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
-  const [gender, setGender] = useState<string | null>(null);
-
-  useEffect(() => {
+  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(() => {
+    if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem("mellow_analysis");
-      const g = localStorage.getItem("mellow_gender");
-      setGender(g);
-      if (raw) setAnalysis(JSON.parse(raw) as ColorAnalysis);
-      else router.replace("/");
-    } catch { router.replace("/"); }
+      return raw ? (JSON.parse(raw) as ColorAnalysis) : null;
+    } catch { return null; }
+  });
+  const [gender] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_gender") : null
+  );
+  const [faceShape] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_face_shape") : null
+  );
+
+  useEffect(() => {
+    if (!localStorage.getItem("mellow_analysis")) router.replace("/");
   }, [router]);
 
   if (!analysis) return null;
@@ -91,7 +96,7 @@ export default function GroomingPage() {
         <motion.div {...fade(0)} className="text-center">
           <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-brown-mid mb-1">Grooming for</p>
           <h1 className="font-display text-5xl text-brown-dark" style={{ fontStyle: "italic", fontWeight: 300 }}>
-            {analysis.hair?.faceShape ?? analysis.season}
+            {faceShape ?? analysis.hair?.faceShape ?? analysis.season}
           </h1>
           {gr?.tip && (
             <p className="font-sans text-sm text-brown-mid mt-3 leading-relaxed max-w-sm mx-auto">{gr.tip}</p>

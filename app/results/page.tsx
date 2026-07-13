@@ -23,6 +23,21 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
   return <div className={`bg-white/55 border border-brown-light/25 rounded-2xl p-5 ${className}`}>{children}</div>;
 }
 
+const SEASON_LABEL: Record<string, string> = {
+  "True Spring":   "Warm & Vivid",
+  "Light Spring":  "Soft & Warm",
+  "Bright Spring": "Bright & Warm",
+  "True Summer":   "Cool & Soft",
+  "Light Summer":  "Light & Cool",
+  "Soft Summer":   "Muted & Neutral",
+  "True Autumn":   "Warm & Rich",
+  "Soft Autumn":   "Warm & Earthy",
+  "Deep Autumn":   "Deep & Warm",
+  "True Winter":   "Cool & Clear",
+  "Deep Winter":   "Deep & Bold",
+  "Bright Winter": "Cool & Striking",
+};
+
 function LoadingScreen({ photoSrc }: { photoSrc: string }) {
   return (
     <div className="min-h-screen bg-cream flex flex-col items-center justify-center gap-8">
@@ -171,9 +186,12 @@ export default function ColorResultsPage() {
           <div className="flex-1">
             <p className="font-sans text-[0.55rem] tracking-[0.3em] uppercase text-brown-mid mb-1">Personal Colour Analysis</p>
             <h1 className="font-display text-5xl sm:text-6xl text-brown-dark leading-tight" style={{ fontStyle: "italic", fontWeight: 300 }}>
-              {analysis.season}
+              {SEASON_LABEL[analysis.season] ?? analysis.season}
             </h1>
-            <p className="font-sans text-[0.58rem] tracking-[0.2em] uppercase text-brown-mid mt-1.5 mb-3">
+            <p className="font-sans text-[0.58rem] tracking-[0.2em] uppercase text-brown-mid/50 mt-1 mb-1">
+              {analysis.season}
+            </p>
+            <p className="font-sans text-[0.58rem] tracking-[0.2em] uppercase text-brown-mid mt-0.5 mb-3">
               {(analysis.descriptors ?? []).join(" · ")}
             </p>
             <p className="font-sans text-sm text-brown-mid leading-relaxed max-w-md">{analysis.seasonDescription}</p>
@@ -269,7 +287,7 @@ export default function ColorResultsPage() {
         {/* ── SEASONAL PALETTE ── */}
         <motion.div {...fade(0.4)}>
           <Card>
-            <SectionLabel>Full Seasonal Palette · {analysis.season}</SectionLabel>
+            <SectionLabel>Full Colour Palette · {SEASON_LABEL[analysis.season] ?? analysis.season}</SectionLabel>
             <div className="space-y-2">
               {chunk(analysis.seasonalPalette ?? [], 8).map((row, ri) => (
                 <div key={ri} className="flex gap-1.5 sm:gap-2 flex-wrap">
