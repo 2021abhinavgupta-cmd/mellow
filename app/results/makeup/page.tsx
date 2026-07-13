@@ -94,9 +94,20 @@ function ErrorScreen({ message, onRetry }: { message: string; onRetry: () => voi
 
 export default function MakeupResultsPage() {
   const router = useRouter();
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [photo, setPhoto] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_image") : null
+  );
+  const [analysis, setAnalysis] = useState<ColorAnalysis | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem("mellow_analysis");
+      return raw ? (JSON.parse(raw) as ColorAnalysis) : null;
+    } catch { return null; }
+  });
+  const [loading, setLoading] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return !localStorage.getItem("mellow_analysis") || !localStorage.getItem("mellow_image");
+  });
   const [error, setError] = useState<string | null>(null);
 
   const runAnalysis = async (imageDataUrl: string) => {
@@ -128,8 +139,8 @@ export default function MakeupResultsPage() {
   useEffect(() => {
     const stored = localStorage.getItem("mellow_image");
     if (!stored) { router.replace("/"); return; }
-    setPhoto(stored);
-    runAnalysis(stored);
+    if (!photo) setPhoto(stored);
+    if (!analysis) runAnalysis(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -185,13 +196,13 @@ export default function MakeupResultsPage() {
               <div>
                 <p className="font-sans text-[0.55rem] tracking-[0.2em] uppercase text-brown-mid mb-3">Matte Shades</p>
                 <div className="flex gap-3 flex-wrap">
-                  {(m?.eyeshadow?.matte ?? []).map((s) => <NamedDot key={s.name} {...s} />)}
+                  {(m?.eyeshadow?.matte ?? []).map((s, i) => <NamedDot key={`em-${i}`} {...s} />)}
                 </div>
               </div>
               <div>
                 <p className="font-sans text-[0.55rem] tracking-[0.2em] uppercase text-brown-mid mb-3">Shimmer Shades</p>
                 <div className="flex gap-3 flex-wrap">
-                  {(m?.eyeshadow?.shimmer ?? []).map((s) => <NamedDot key={s.name} {...s} />)}
+                  {(m?.eyeshadow?.shimmer ?? []).map((s, i) => <NamedDot key={`es-${i}`} {...s} />)}
                 </div>
               </div>
             </div>
@@ -216,7 +227,7 @@ export default function MakeupResultsPage() {
                 <div key={label}>
                   <Divider label={label} />
                   <div className="flex gap-4 flex-wrap mt-3">
-                    {(items ?? []).map((s) => <LipSwatch key={s.name} {...s} />)}
+                    {(items ?? []).map((s, i) => <LipSwatch key={`lip-${label}-${i}`} {...s} />)}
                   </div>
                 </div>
               ))}
@@ -232,7 +243,7 @@ export default function MakeupResultsPage() {
           <Card>
             <SectionLabel>Blush Shades</SectionLabel>
             <div className="flex gap-3 flex-wrap mb-4">
-              {(m?.blush?.shades ?? []).map((s) => <NamedDot key={s.name} {...s} />)}
+              {(m?.blush?.shades ?? []).map((s, i) => <NamedDot key={`bl-${i}`} {...s} />)}
             </div>
             {m?.blush?.tip && (
               <p className="font-sans text-xs text-brown-mid leading-relaxed border-t border-brown-light/20 pt-3">{m.blush.tip}</p>
@@ -265,7 +276,7 @@ export default function MakeupResultsPage() {
               {(analysis.skinTips ?? []).map((tip, i) => {
                 const Icon = SKIN_ICONS[i] ?? Circle;
                 return (
-                  <div key={tip.title} className="flex flex-col items-center text-center gap-2">
+                  <div key={`st-${i}`} className="flex flex-col items-center text-center gap-2">
                     <div className="w-10 h-10 rounded-full bg-brown-light/15 flex items-center justify-center">
                       <Icon className="w-4 h-4 text-brown-mid" strokeWidth={1.5} />
                     </div>

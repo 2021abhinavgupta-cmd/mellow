@@ -82,7 +82,9 @@ const OCCASIONS: OccasionKey[] = ["everyday", "office", "occasional"];
 
 export default function StyleResultsPage() {
   const router = useRouter();
-  const [photo, setPhoto] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<string | null>(() =>
+    typeof window !== "undefined" ? localStorage.getItem("mellow_image") : null
+  );
   const [analysis, setAnalysis] = useState<ColorAnalysis | null>(null);
   const [measuredBodyType, setMeasuredBodyType] = useState<BodyShape | null>(null);
   const [error, setError] = useState<string | null>(null);
