@@ -32,6 +32,44 @@ export interface SkinAnalysis {
   };
 }
 
+export interface NailAnalysis {
+  bestPolish: NamedSwatch[];
+  frenchTip: string[];
+  avoid: string[];
+  tip: string;
+}
+
+export interface FragranceAnalysis {
+  families: string[];
+  notes: string[];
+  indianAttars: string[];
+  seasonal: string[];
+  tip: string;
+}
+
+export interface AccessoriesAnalysis {
+  handbag: { shapes: string[]; colors: string[] };
+  belt: { styles: string[]; tip: string };
+  sunglasses: string[];
+  scarf: { styles: string[]; colors: string[] };
+  shoes: { heelTypes: string[]; colors: string[] };
+  tip: string;
+}
+
+export interface IndianOccasionsAnalysis {
+  festival: { outfits: string[]; colors: string[]; makeup: string };
+  weddingGuest: { outfits: string[]; colors: string[]; makeup: string };
+  casualIndian: { outfits: string[]; colors: string[] };
+}
+
+export interface GroomingAnalysis {
+  beardStyles: { name: string; description: string }[];
+  noBeardOptions: string[];
+  skincare: string[];
+  fragranceNotes: string[];
+  tip: string;
+}
+
 export interface ColorAnalysis {
   season: string;
   seasonDescription: string;
@@ -96,4 +134,9 @@ export interface ColorAnalysis {
       tip: string;
     };
   };
+  nails?: NailAnalysis;
+  fragrance?: FragranceAnalysis;
+  accessories?: AccessoriesAnalysis;
+  indianOccasions?: IndianOccasionsAnalysis;
+  grooming?: GroomingAnalysis | null;
 }

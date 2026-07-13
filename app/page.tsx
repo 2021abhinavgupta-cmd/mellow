@@ -57,6 +57,8 @@ export default function Home() {
   const [skinToneHex,  setSkinToneHex]  = useState<string | null>(null);
   const [showScanner,  setShowScanner]  = useState(false);
   const [pendingScanner, setPendingScanner] = useState(false);
+  const [pendingAge,   setPendingAge]   = useState(false);
+  const [ageRange,     setAgeRange]     = useState<string | null>(null);
   const [fromScan,     setFromScan]     = useState(false);
   const [dragging,     setDragging]     = useState(false);
   const [analyzing,    setAnalyzing]    = useState(false);
@@ -136,6 +138,8 @@ export default function Home() {
 
   const analyze = useCallback(async () => {
     if (!image || !gender) return;
+    localStorage.setItem("mellow_age_range", ageRange ?? "");
+    localStorage.removeItem("mellow_face_shape_confidence");
     localStorage.removeItem("mellow_analysis");
     localStorage.removeItem("mellow_skin_analysis");
     localStorage.removeItem("mellow_body_type");
@@ -173,7 +177,7 @@ export default function Home() {
     }
 
     router.push("/results/skin");
-  }, [image, gender, faceShape, router]);
+  }, [image, gender, ageRange, faceShape, router]);
 
   if (analyzing) {
     return (
@@ -278,7 +282,39 @@ export default function Home() {
                     </p>
                   </div>
                 </button>
+              ) : pendingAge ? (
+                /* Step 2: age range */
+                <div className="w-full relative rounded-2xl border-2 border-brown-mid bg-white/60 px-10 py-12 flex flex-col items-center gap-5">
+                  <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50" />
+                  <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50" />
+                  <span className="absolute bottom-3 left-3 w-6 h-6 border-b border-l border-brown-mid/50" />
+                  <span className="absolute bottom-3 right-3 w-6 h-6 border-b border-r border-brown-mid/50" />
+                  <div className="text-center">
+                    <p className="font-display text-2xl text-brown-dark" style={{ fontWeight: 400 }}>
+                      Your age range
+                    </p>
+                    <p className="font-sans text-sm text-brown-mid mt-1.5">Shapes routine &amp; style advice</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 w-full">
+                    {(["Under 25", "25–35", "35–45", "45+"] as const).map((age) => (
+                      <button
+                        key={age}
+                        onClick={() => { setAgeRange(age); setShowScanner(true); setPendingAge(false); }}
+                        className="py-3 rounded-xl font-sans text-sm tracking-[0.15em] border border-brown-light bg-white/50 text-brown-mid hover:bg-brown-dark hover:text-cream hover:border-brown-dark transition-all duration-200"
+                      >
+                        {age}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => { setPendingAge(false); setPendingScanner(true); }}
+                    className="font-sans text-xs text-brown-mid/60 hover:text-brown-mid transition-colors"
+                  >
+                    ← Back
+                  </button>
+                </div>
               ) : (
+                /* Step 1: gender */
                 <div className="w-full relative rounded-2xl border-2 border-brown-mid bg-white/60 px-10 py-12 flex flex-col items-center gap-5">
                   <span className="absolute top-3 left-3 w-6 h-6 border-t border-l border-brown-mid/50" />
                   <span className="absolute top-3 right-3 w-6 h-6 border-t border-r border-brown-mid/50" />
@@ -296,7 +332,7 @@ export default function Home() {
                     {(["female", "male"] as const).map((g) => (
                       <button
                         key={g}
-                        onClick={() => { setGender(g); setShowScanner(true); setPendingScanner(false); }}
+                        onClick={() => { setGender(g); setPendingScanner(false); setPendingAge(true); }}
                         className="py-3 rounded-xl font-sans text-sm tracking-[0.15em] uppercase border border-brown-light bg-white/50 text-brown-mid hover:bg-brown-dark hover:text-cream hover:border-brown-dark transition-all duration-200"
                       >
                         {g === "female" ? "Female" : "Male"}
@@ -387,7 +423,7 @@ export default function Home() {
               )}
 
               <button
-                onClick={() => { setImage(null); setFaceShape(null); setSkinToneHex(null); setFromScan(false); setGender(null); }}
+                onClick={() => { setImage(null); setFaceShape(null); setSkinToneHex(null); setFromScan(false); setGender(null); setAgeRange(null); setPendingAge(false); }}
                 className="font-sans text-xs text-brown-mid/60 hover:text-brown-mid transition-colors"
               >
                 ← Rescan

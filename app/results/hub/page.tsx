@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
-import { ArrowRight, Check, Lock } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { ArrowRight, Check, Lock, RefreshCw } from "lucide-react";
 import type { ColorAnalysis } from "@/app/lib/types";
 
 interface Module {
@@ -14,6 +14,7 @@ interface Module {
   done: boolean;
   locked?: boolean;
   lockedMsg?: string;
+  genderOnly?: "male" | "female";
 }
 
 const fade = (delay = 0) => ({
@@ -27,12 +28,19 @@ export default function HubPage() {
   const [photo, setPhoto] = useState<string | null>(null);
   const [season, setSeason] = useState<string | null>(null);
   const [undertone, setUndertone] = useState<string | null>(null);
+  const [gender, setGender] = useState<string | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
+  const [prevDone, setPrevDone] = useState<Record<string, boolean>>({});
+  const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
 
   useEffect(() => {
     const img = localStorage.getItem("mellow_image");
     if (!img) { router.replace("/"); return; }
     setPhoto(img);
+
+    const g = localStorage.getItem("mellow_gender") ?? "female";
+    setGender(g);
+    const isMale = g === "male";
 
     const analysisRaw = localStorage.getItem("mellow_analysis");
     const analysis: ColorAnalysis | null = analysisRaw ? JSON.parse(analysisRaw) : null;
@@ -50,7 +58,7 @@ export default function HubPage() {
     const hasSkin = !!localStorage.getItem("mellow_skin_analysis");
     const hasBody = !!localStorage.getItem("mellow_body_type");
 
-    setModules([
+    const mods: Module[] = [
       {
         key: "colour",
         title: "Colour Analysis",
@@ -60,9 +68,9 @@ export default function HubPage() {
       },
       {
         key: "makeup",
-        title: "Makeup Guide",
-        subtitle: "Eyeshadow, lips, blush & contour",
-        path: "/results/makeup",
+        title: isMale ? "Grooming Guide" : "Makeup Guide",
+        subtitle: isMale ? "Beard, skincare & fragrance" : "Eyeshadow, lips, blush & contour",
+        path: isMale ? "/results/grooming" : "/results/makeup",
         done: hasAnalysis,
         locked: !hasAnalysis,
         lockedMsg: "Complete colour analysis first",
@@ -85,6 +93,42 @@ export default function HubPage() {
           ? `Body shape: ${localStorage.getItem("mellow_body_type")}`
           : "Outfit formula & flattering styles",
         path: "/results/style",
+        done: hasAnalysis,
+        locked: !hasAnalysis,
+        lockedMsg: "Complete colour analysis first",
+      },
+      {
+        key: "occasions",
+        title: "Indian Occasions",
+        subtitle: "Festival, wedding & daily Indian wear",
+        path: "/results/occasions",
+        done: hasAnalysis,
+        locked: !hasAnalysis,
+        lockedMsg: "Complete colour analysis first",
+      },
+      {
+        key: "nails",
+        title: "Nail Colours",
+        subtitle: "Season-matched polish picks",
+        path: "/results/nails",
+        done: hasAnalysis,
+        locked: !hasAnalysis,
+        lockedMsg: "Complete colour analysis first",
+      },
+      {
+        key: "fragrance",
+        title: "Fragrance Guide",
+        subtitle: "Scent families & Indian attars",
+        path: "/results/fragrance",
+        done: hasAnalysis,
+        locked: !hasAnalysis,
+        lockedMsg: "Complete colour analysis first",
+      },
+      {
+        key: "accessories",
+        title: "Accessories",
+        subtitle: "Bags, belts, shoes & dupattas",
+        path: "/results/accessories",
         done: hasAnalysis,
         locked: !hasAnalysis,
         lockedMsg: "Complete colour analysis first",
@@ -114,12 +158,24 @@ export default function HubPage() {
         path: hasBody ? "/results/style" : "/body-scan",
         done: hasBody,
       },
-    ]);
+    ];
+
+    setModules(mods);
+    const doneMap = Object.fromEntries(mods.map(m => [m.key, m.done]));
+    // Detect newly completed module vs previous render
+    setPrevDone(prev => {
+      const newlyDone = mods.find(m => m.done && !prev[m.key]);
+      if (newlyDone) setJustUnlocked(newlyDone.key);
+      return doneMap;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   if (!photo) return null;
 
-  const doneCount = modules.filter(m => m.done).length;
+  const visibleModules = modules.filter(m => !m.genderOnly || m.genderOnly === gender);
+  const doneCount = visibleModules.filter(m => m.done).length;
+  const totalCount = visibleModules.length;
 
   return (
     <div className="min-h-screen bg-cream pb-16">
@@ -178,76 +234,112 @@ export default function HubPage() {
         <motion.div {...fade(0.06)}>
           <div className="flex items-center justify-between mb-2">
             <p className="font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid">
-              {doneCount} of {modules.length} complete
+              {doneCount} of {totalCount} complete
             </p>
             <p className="font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid/50">
-              {Math.round((doneCount / modules.length) * 100)}%
+              {Math.round((doneCount / totalCount) * 100)}%
             </p>
           </div>
           <div className="h-0.5 bg-brown-light/20 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-brown-mid rounded-full"
               initial={{ width: 0 }}
-              animate={{ width: `${(doneCount / modules.length) * 100}%` }}
+              animate={{ width: `${(doneCount / totalCount) * 100}%` }}
               transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
             />
           </div>
         </motion.div>
 
-        {/* Module cards */}
-        <div className="space-y-3">
-          {modules.map((mod, i) => (
-            <motion.div key={mod.key} {...fade(0.1 + i * 0.05)}>
+        {/* Rescan prompt — show when all core scans done but skin/body missing */}
+        {!prevDone["skin"] && (
+          <AnimatePresence>
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+            >
               <button
-                onClick={() => !mod.locked && router.push(mod.path)}
-                disabled={mod.locked}
-                className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl border transition-colors text-left group ${
-                  mod.locked
-                    ? "bg-brown-light/5 border-brown-light/15 opacity-50 cursor-not-allowed"
-                    : mod.done
-                    ? "bg-white/55 border-brown-light/25 hover:border-brown-mid/40"
-                    : "bg-white/30 border-dashed border-brown-light/40 hover:border-brown-mid/40 hover:bg-white/45"
-                }`}
+                onClick={() => router.push("/skin-scan")}
+                className="w-full flex items-center gap-3 px-5 py-3.5 bg-brown-dark/5 border border-brown-light/25 rounded-xl hover:border-brown-mid/40 transition-colors group"
               >
-                {/* Status indicator */}
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    mod.locked
-                      ? "bg-brown-light/20"
-                      : mod.done
-                      ? "bg-brown-dark"
-                      : "border-2 border-brown-light/40"
-                  }`}
-                >
-                  {mod.locked ? (
-                    <Lock className="w-3.5 h-3.5 text-brown-mid/40" strokeWidth={1.5} />
-                  ) : mod.done ? (
-                    <Check className="w-3.5 h-3.5 text-cream" strokeWidth={2} />
-                  ) : null}
+                <RefreshCw className="w-4 h-4 text-brown-mid flex-shrink-0" strokeWidth={1.5} />
+                <div className="text-left flex-1">
+                  <p className="font-sans text-xs font-medium text-brown-dark">Complete your skin scan</p>
+                  <p className="font-sans text-[0.6rem] text-brown-mid/60">Takes 4 seconds — close-up camera</p>
                 </div>
-
-                <div className="flex-1 min-w-0">
-                  <p className={`font-sans text-sm font-medium leading-tight ${mod.done ? "text-brown-dark" : "text-brown-mid"}`}>
-                    {mod.title}
-                  </p>
-                  <p className="font-sans text-[0.62rem] text-brown-mid/60 mt-0.5 truncate">
-                    {mod.locked ? mod.lockedMsg : mod.subtitle}
-                  </p>
-                </div>
-
-                {!mod.locked && (
-                  <ArrowRight
-                    className="w-4 h-4 text-brown-light group-hover:text-brown-mid group-hover:translate-x-0.5 transition-all flex-shrink-0"
-                    strokeWidth={1.5}
-                  />
-                )}
+                <ArrowRight className="w-4 h-4 text-brown-light group-hover:text-brown-mid transition-colors flex-shrink-0" strokeWidth={1.5} />
               </button>
             </motion.div>
-          ))}
+          </AnimatePresence>
+        )}
+
+        {/* Module cards */}
+        <div className="space-y-3">
+          {visibleModules.map((mod, i) => {
+            const isJustUnlocked = justUnlocked === mod.key;
+            return (
+              <motion.div
+                key={mod.key}
+                {...fade(0.1 + i * 0.04)}
+              >
+                <motion.div
+                  animate={isJustUnlocked ? { scale: [1, 1.03, 1] } : {}}
+                  transition={{ duration: 0.4, ease: "easeOut" }}
+                >
+                  <button
+                    onClick={() => !mod.locked && router.push(mod.path)}
+                    disabled={mod.locked}
+                    className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl border transition-colors text-left group ${
+                      mod.locked
+                        ? "bg-brown-light/5 border-brown-light/15 opacity-50 cursor-not-allowed"
+                        : mod.done
+                        ? "bg-white/55 border-brown-light/25 hover:border-brown-mid/40"
+                        : "bg-white/30 border-dashed border-brown-light/40 hover:border-brown-mid/40 hover:bg-white/45"
+                    }`}
+                  >
+                    {/* Status indicator */}
+                    <motion.div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                        mod.locked
+                          ? "bg-brown-light/20"
+                          : mod.done
+                          ? "bg-brown-dark"
+                          : "border-2 border-brown-light/40"
+                      }`}
+                      animate={isJustUnlocked && mod.done ? { backgroundColor: ["#C9A882", "#4A3728"] } : {}}
+                      transition={{ duration: 0.4 }}
+                    >
+                      {mod.locked ? (
+                        <Lock className="w-3.5 h-3.5 text-brown-mid/40" strokeWidth={1.5} />
+                      ) : mod.done ? (
+                        <Check className="w-3.5 h-3.5 text-cream" strokeWidth={2} />
+                      ) : null}
+                    </motion.div>
+
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-sans text-sm font-medium leading-tight ${mod.done ? "text-brown-dark" : "text-brown-mid"}`}>
+                        {mod.title}
+                      </p>
+                      <p className="font-sans text-[0.62rem] text-brown-mid/60 mt-0.5 truncate">
+                        {mod.locked ? mod.lockedMsg : mod.subtitle}
+                      </p>
+                    </div>
+
+                    {!mod.locked && (
+                      <ArrowRight
+                        className="w-4 h-4 text-brown-light group-hover:text-brown-mid group-hover:translate-x-0.5 transition-all flex-shrink-0"
+                        strokeWidth={1.5}
+                      />
+                    )}
+                  </button>
+                </motion.div>
+              </motion.div>
+            );
+          })}
         </div>
 
         {/* Start over */}
-        <motion.div {...fade(0.1 + modules.length * 0.05 + 0.05)}>
+        <motion.div {...fade(0.1 + visibleModules.length * 0.04 + 0.05)}>
           <button
             onClick={() => router.push("/")}
             className="w-full py-3 font-sans text-xs tracking-widest uppercase text-brown-mid/40 hover:text-brown-mid transition-colors"

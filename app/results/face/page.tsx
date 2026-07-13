@@ -338,6 +338,7 @@ export default function FacePage() {
   const [faceShape, setFaceShape] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<string | null>(null);
   const [isMale, setIsMale] = useState(false);
+  const [feedback, setFeedback] = useState<"accurate" | "inaccurate" | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("mellow_face_shape");
@@ -350,7 +351,14 @@ export default function FacePage() {
     }
     setConfidence(localStorage.getItem("mellow_face_shape_confidence"));
     setIsMale(localStorage.getItem("mellow_gender") === "male");
+    const fb = localStorage.getItem("mellow_face_shape_feedback");
+    if (fb === "accurate" || fb === "inaccurate") setFeedback(fb);
   }, []);
+
+  const submitFeedback = (value: "accurate" | "inaccurate") => {
+    localStorage.setItem("mellow_face_shape_feedback", value);
+    setFeedback(value);
+  };
 
   const detected = FACE_SHAPES.find(s => faceShape && s.name.toLowerCase() === faceShape.toLowerCase())
     ?? (faceShape ? { name: faceShape, traits: [], tip: "" } : null);
@@ -431,6 +439,33 @@ export default function FacePage() {
                 </div>
               </div>
             </Card>
+          </motion.div>
+        )}
+
+        {/* Accuracy feedback */}
+        {faceShape && (
+          <motion.div {...fade(0.08)}>
+            {feedback ? (
+              <p className="font-sans text-[0.62rem] text-brown-mid/50 text-center tracking-widest">
+                {feedback === "accurate" ? "Thanks — result confirmed ✓" : "Thanks for the feedback — try rescanning for better accuracy"}
+              </p>
+            ) : (
+              <div className="flex items-center justify-center gap-4">
+                <p className="font-sans text-[0.62rem] text-brown-mid/60 tracking-widest">Was this correct?</p>
+                <button
+                  onClick={() => submitFeedback("accurate")}
+                  className="px-4 py-1.5 rounded-lg border border-brown-light/30 font-sans text-[0.62rem] tracking-widest text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors"
+                >
+                  Yes ✓
+                </button>
+                <button
+                  onClick={() => submitFeedback("inaccurate")}
+                  className="px-4 py-1.5 rounded-lg border border-brown-light/30 font-sans text-[0.62rem] tracking-widest text-brown-mid hover:border-brown-mid hover:text-brown-dark transition-colors"
+                >
+                  No
+                </button>
+              </div>
+            )}
           </motion.div>
         )}
 

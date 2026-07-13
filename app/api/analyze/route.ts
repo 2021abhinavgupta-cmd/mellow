@@ -80,6 +80,10 @@ ${isMale ? "Do NOT suggest: buns, half-up half-down, updos meant for women, long
 STYLE — suggest ${isMale ? "men's" : "women's"} clothing only. Examples: ${styleExamples}.
 ${isMale ? "Outfit images should show the man in masculine attire (shirts, trousers, suits, kurtas)." : "Outfit images should show the woman in feminine attire (dresses, skirts, blouses, sarees)."}
 
+TARGET AUDIENCE: Indian. Prioritise Indian clothing (kurta, salwar, saree, lehenga for women; kurta-pyjama, sherwani for men), gold jewellery, Indian occasions (festivals, weddings).
+
+GROOMING — ${isMale ? "include the grooming object with beard style recommendations for this face shape, skincare routine, and fragrance notes." : 'set grooming to null — not applicable for female users.'}
+
 Return ONLY valid JSON (no markdown, no explanation) with this exact shape:`;}
 
 const BASE_SCHEMA = `
@@ -220,7 +224,82 @@ const BASE_SCHEMA = `
       "banglesAndBracelets": ["2 bangle/bracelet styles — for males: e.g. Leather cuff, Steel bracelet"],
       "tip": "1 sentence: overall jewellery direction for their season and colouring"
     }
-  }
+  },
+
+  "nails": {
+    "bestPolish": [
+      { "name": "e.g. Warm Terracotta", "hex": "#..." },
+      { "name": "...", "hex": "#..." },
+      { "name": "...", "hex": "#..." },
+      { "name": "...", "hex": "#..." },
+      { "name": "...", "hex": "#..." },
+      { "name": "...", "hex": "#..." }
+    ],
+    "frenchTip": ["2 hex codes — French tip base and tip colour variations for their season"],
+    "avoid": ["2 nail polish shades/families to avoid for their undertone"],
+    "tip": "1 sentence: overall nail direction — finish, colour family, occasion notes"
+  },
+
+  "fragrance": {
+    "families": ["3 scent families that suit their season e.g. Warm Spicy, Woody Oriental, Soft Floral Amber"],
+    "notes": ["5 key fragrance notes e.g. Sandalwood, Rose Oud, Amber, Cardamom, Jasmine"],
+    "indianAttars": ["2 Indian attar or Indian perfume recommendations e.g. Rose Attar, Oud Al Hindi, Mogra Attar"],
+    "seasonal": ["2 season-specific suggestions e.g. heavier oud in winter, lighter floral musk in monsoon"],
+    "tip": "1 sentence: fragrance philosophy — warm/cool, intensity, occasion"
+  },
+
+  "accessories": {
+    "handbag": {
+      "shapes": ["3 flattering bag shapes for their body type e.g. Structured tote, Hobo bag, Crossbody"],
+      "colors": ["3 hex codes — best handbag accent colours from their palette"]
+    },
+    "belt": {
+      "styles": ["2 belt styles that flatter their waist and body type"],
+      "tip": "1 sentence: belt direction for their body shape"
+    },
+    "sunglasses": ["3 frame shapes for their face shape e.g. Aviator, Cat-eye, Round"],
+    "scarf": {
+      "styles": ["2 dupatta or scarf draping styles that suit their body and face"],
+      "colors": ["3 hex codes — scarf accent colours"]
+    },
+    "shoes": {
+      "heelTypes": ["2 heel types or flat styles that complement their body proportions"],
+      "colors": ["3 hex codes — shoe neutral and accent colours"]
+    },
+    "tip": "1 sentence: overall accessory direction — mix metals, scale, occasion"
+  },
+
+  "indianOccasions": {
+    "festival": {
+      "outfits": ["3 festive outfit styles e.g. Silk kurta with palazzo, Embroidered anarkali, Banarasi saree"],
+      "colors": ["4 hex codes — festive palette from their season, suitable for Indian festivities"],
+      "makeup": "1 sentence: festival makeup direction for their skin tone"
+    },
+    "weddingGuest": {
+      "outfits": ["3 wedding guest outfit styles e.g. Georgette lehenga, Silk saree, Sharara set"],
+      "colors": ["4 hex codes — wedding guest palette — rich, celebration-appropriate"],
+      "makeup": "1 sentence: wedding guest makeup direction"
+    },
+    "casualIndian": {
+      "outfits": ["3 everyday Indian wear styles e.g. Cotton kurta-churidar, Salwar kameez, Linen co-ord"],
+      "colors": ["4 hex codes — everyday Indian wear palette — lighter, wearable tones"]
+    }
+  },
+
+  "grooming": null
+}
+
+GROOMING OBJECT (populate only when gender is MALE, set null for female):
+{
+  "beardStyles": [
+    { "name": "e.g. Short Boxed Beard", "description": "1 sentence: why this suits their face shape" },
+    { "name": "...", "description": "..." },
+    { "name": "...", "description": "..." }
+  ],
+  "noBeardOptions": ["2 clean-shave or stubble options e.g. Heavy Stubble, Clean-Shaved with defined edges"],
+  "skincare": ["4 practical grooming and skincare steps for a man — moisturiser, SPF, beard care, etc."],
+  "fragranceNotes": ["3 masculine fragrance notes that suit their season e.g. Vetiver, Cedar, Bergamot"],
+  "tip": "1 sentence: overall grooming direction for their colouring and face shape"
 }`;
 
 export async function POST(req: NextRequest) {
@@ -252,7 +331,7 @@ export async function POST(req: NextRequest) {
               ],
             },
           ],
-          max_tokens: 5500,
+          max_tokens: 7000,
         });
         const content = response.choices[0].message.content ?? "{}";
         return Response.json(JSON.parse(content));
