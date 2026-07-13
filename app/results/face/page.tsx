@@ -333,27 +333,35 @@ const fade = (delay = 0) => ({
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
+function readFaceShape(): string | null {
+  const stored = localStorage.getItem("mellow_face_shape");
+  if (stored) return stored;
+  try {
+    const a = JSON.parse(localStorage.getItem("mellow_analysis") ?? "{}");
+    return a?.hair?.faceShape ?? null;
+  } catch { return null; }
+}
+
 export default function FacePage() {
   const router = useRouter();
-  const [faceShape, setFaceShape] = useState<string | null>(null);
-  const [confidence, setConfidence] = useState<string | null>(null);
-  const [isMale, setIsMale] = useState(false);
-  const [feedback, setFeedback] = useState<"accurate" | "inaccurate" | null>(null);
+  const [faceShape] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : readFaceShape()
+  );
+  const [confidence] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : localStorage.getItem("mellow_face_shape_confidence")
+  );
+  const [isMale] = useState<boolean>(() =>
+    typeof window !== "undefined" && localStorage.getItem("mellow_gender") === "male"
+  );
+  const [feedback, setFeedback] = useState<"accurate" | "inaccurate" | null>(() => {
+    if (typeof window === "undefined") return null;
+    const fb = localStorage.getItem("mellow_face_shape_feedback");
+    return fb === "accurate" || fb === "inaccurate" ? fb : null;
+  });
 
   useEffect(() => {
-    const stored = localStorage.getItem("mellow_face_shape");
-    if (stored) setFaceShape(stored);
-    else {
-      try {
-        const analysis = JSON.parse(localStorage.getItem("mellow_analysis") ?? "{}");
-        if (analysis?.hair?.faceShape) setFaceShape(analysis.hair.faceShape);
-      } catch { /* ignore */ }
-    }
-    setConfidence(localStorage.getItem("mellow_face_shape_confidence"));
-    setIsMale(localStorage.getItem("mellow_gender") === "male");
-    const fb = localStorage.getItem("mellow_face_shape_feedback");
-    if (fb === "accurate" || fb === "inaccurate") setFeedback(fb);
-  }, []);
+    if (!faceShape) router.replace("/face-scan");
+  }, [faceShape, router]);
 
   const submitFeedback = (value: "accurate" | "inaccurate") => {
     localStorage.setItem("mellow_face_shape_feedback", value);
@@ -366,6 +374,8 @@ export default function FacePage() {
   const extras = faceShape ? FACE_SHAPE_EXTRAS[faceShape] ?? FACE_SHAPE_EXTRAS[
     Object.keys(FACE_SHAPE_EXTRAS).find(k => k.toLowerCase() === faceShape.toLowerCase()) ?? ""
   ] ?? null : null;
+
+  if (!faceShape) return null;
 
   const GRID_SHAPES = FACE_SHAPES.map(s => s.name);
 

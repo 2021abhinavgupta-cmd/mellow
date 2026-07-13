@@ -173,7 +173,6 @@ export default function Home() {
     } finally {
       clearTimeout(timeoutId);
       controllerRef.current = null;
-      setAnalyzing(false);
     }
 
     router.push("/results/skin");

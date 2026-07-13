@@ -67,16 +67,19 @@ const CONCERN_META: Record<string, { label: string; icon: string }> = {
 
 export default function SkinPage() {
   const router = useRouter();
-  const [analysis, setAnalysis] = useState<SkinAnalysis | null>(null);
+  const [analysis, setAnalysis] = useState<SkinAnalysis | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = localStorage.getItem("mellow_skin_analysis");
+      return raw ? (JSON.parse(raw) as SkinAnalysis) : null;
+    } catch { return null; }
+  });
   const [activeRoutine, setActiveRoutine] = useState<"morning" | "evening">("morning");
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("mellow_skin_analysis");
-      if (raw) setAnalysis(JSON.parse(raw) as SkinAnalysis);
-      else router.replace("/skin-scan");
-    } catch { router.replace("/skin-scan"); }
-  }, [router]);
+    if (analysis) return;
+    router.replace("/skin-scan");
+  }, [analysis, router]);
 
   if (!analysis) return null;
 
