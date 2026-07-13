@@ -360,7 +360,7 @@ export default function FacePage() {
   });
 
   useEffect(() => {
-    if (!faceShape) router.replace("/face-scan");
+    if (!faceShape) router.replace("/");
   }, [faceShape, router]);
 
   const submitFeedback = (value: "accurate" | "inaccurate") => {
@@ -396,7 +396,7 @@ export default function FacePage() {
         </button>
         <p className="font-sans text-[0.58rem] tracking-[0.28em] uppercase text-brown-mid flex-1">Face Shape</p>
         <button
-          onClick={() => router.push("/face-scan")}
+          onClick={() => router.push("/")}
           className="font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid/60 hover:text-brown-mid transition-colors"
         >
           Rescan
@@ -434,8 +434,8 @@ export default function FacePage() {
                 <div className="flex-1 min-w-0">
                   <SectionLabel>Key characteristics</SectionLabel>
                   <ul className="space-y-2">
-                    {detected.traits.map((t) => (
-                      <li key={t} className="flex gap-2 font-sans text-xs text-brown-mid leading-snug">
+                    {detected.traits.map((t, i) => (
+                      <li key={`trait-${i}`} className="flex gap-2 font-sans text-xs text-brown-mid leading-snug">
                         <span className="text-brown-light flex-shrink-0 mt-0.5">—</span>
                         {t}
                       </li>
@@ -558,9 +558,9 @@ export default function FacePage() {
                   <div>
                     <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/60 mb-2">Best for you</p>
                     <div className="flex flex-wrap gap-2">
-                      {extras.glasses.best.map((frame) => (
+                      {extras.glasses.best.map((frame, fi) => (
                         <span
-                          key={frame}
+                          key={`frame-${fi}`}
                           className="px-3 py-1 rounded-full bg-brown-light/15 font-sans text-xs text-brown-dark"
                         >
                           {frame}
@@ -584,9 +584,9 @@ export default function FacePage() {
                   <div>
                     <p className="font-sans text-[0.6rem] tracking-widest uppercase text-brown-mid/60 mb-2">Flattering styles</p>
                     <div className="flex flex-wrap gap-2">
-                      {extras.earrings.best.map((style) => (
+                      {extras.earrings.best.map((style, ei) => (
                         <span
-                          key={style}
+                          key={`earring-${ei}`}
                           className="px-3 py-1 rounded-full bg-brown-light/15 font-sans text-xs text-brown-dark"
                         >
                           {style}

@@ -23,155 +23,161 @@ const fade = (delay = 0) => ({
   transition: { duration: 0.45, delay, ease: "easeOut" } as import("framer-motion").Transition,
 });
 
+function buildModules(analysis: ColorAnalysis | null, isMale: boolean): Module[] {
+  const hasAnalysis = !!analysis;
+  const faceShapeStored = localStorage.getItem("mellow_face_shape");
+  const hasFaceShape = !!(faceShapeStored || analysis?.hair?.faceShape);
+  const faceConf = localStorage.getItem("mellow_face_shape_confidence");
+  const skinRaw = localStorage.getItem("mellow_skin_analysis");
+  const hasSkin = !!(() => { try { return skinRaw && JSON.parse(skinRaw)?.skinType; } catch { return false; } })();
+  const bodyType = localStorage.getItem("mellow_body_type");
+  const hasBody = !!bodyType;
+
+  return [
+    {
+      key: "colour",
+      title: "Colour Analysis",
+      subtitle: analysis ? `${analysis.season} · ${analysis.undertone}` : "Season & palette",
+      path: "/results",
+      done: hasAnalysis,
+    },
+    {
+      key: "makeup",
+      title: isMale ? "Grooming Guide" : "Makeup Guide",
+      subtitle: isMale ? "Beard, skincare & fragrance" : "Eyeshadow, lips, blush & contour",
+      path: isMale ? "/results/grooming" : "/results/makeup",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "hair",
+      title: "Hair Styles",
+      subtitle: hasFaceShape
+        ? `Face shape: ${faceShapeStored ?? analysis?.hair?.faceShape ?? "detected"}`
+        : "Flattering cuts for your face",
+      path: "/results/hair",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "style",
+      title: "Style Guide",
+      subtitle: hasBody ? `Body shape: ${bodyType}` : "Outfit formula & flattering styles",
+      path: "/results/style",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "occasions",
+      title: "Indian Occasions",
+      subtitle: "Festival, wedding & daily Indian wear",
+      path: "/results/occasions",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "nails",
+      title: "Nail Colours",
+      subtitle: "Season-matched polish picks",
+      path: "/results/nails",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "fragrance",
+      title: "Fragrance Guide",
+      subtitle: "Scent families & Indian attars",
+      path: "/results/fragrance",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "accessories",
+      title: "Accessories",
+      subtitle: "Bags, belts, shoes & dupattas",
+      path: "/results/accessories",
+      done: hasAnalysis,
+      locked: !hasAnalysis,
+      lockedMsg: "Complete colour analysis first",
+    },
+    {
+      key: "face",
+      title: "Face Shape",
+      subtitle: hasFaceShape
+        ? `${faceShapeStored ?? analysis?.hair?.faceShape ?? "Detected"}${faceConf === "Low" ? " · Low confidence" : ""}`
+        : "Scan for precise detection",
+      path: hasFaceShape ? "/results/face" : "/",
+      done: hasFaceShape,
+    },
+    {
+      key: "skin",
+      title: "Skin Analysis",
+      subtitle: hasSkin ? "Routine, concerns & ingredients" : "Close-up skin scan",
+      path: hasSkin ? "/results/skin" : "/skin-scan",
+      done: hasSkin,
+    },
+    {
+      key: "body",
+      title: "Body Shape",
+      subtitle: hasBody ? (bodyType ?? "Measured") : "Measurements or camera scan",
+      path: hasBody ? "/results/style" : "/body-scan",
+      done: hasBody,
+    },
+  ];
+}
+
+interface HubInit {
+  photo: string | null;
+  gender: string;
+  season: string | null;
+  undertone: string | null;
+  modules: Module[];
+  skinDone: boolean;
+}
+
+function initHub(): HubInit {
+  if (typeof window === "undefined") {
+    return { photo: null, gender: "female", season: null, undertone: null, modules: [], skinDone: false };
+  }
+  const photo = localStorage.getItem("mellow_image");
+  const g = localStorage.getItem("mellow_gender") ?? "female";
+  let analysis: ColorAnalysis | null = null;
+  try {
+    const raw = localStorage.getItem("mellow_analysis");
+    if (raw) analysis = JSON.parse(raw) as ColorAnalysis;
+  } catch { /* ignore */ }
+  let skinDone = false;
+  try {
+    const skinRaw = localStorage.getItem("mellow_skin_analysis");
+    skinDone = !!(skinRaw && JSON.parse(skinRaw)?.skinType);
+  } catch { /* ignore */ }
+  return {
+    photo,
+    gender: g,
+    season: analysis?.season ?? null,
+    undertone: analysis?.undertone ?? null,
+    modules: buildModules(analysis, g === "male"),
+    skinDone,
+  };
+}
+
 export default function HubPage() {
   const router = useRouter();
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [season, setSeason] = useState<string | null>(null);
-  const [undertone, setUndertone] = useState<string | null>(null);
-  const [gender, setGender] = useState<string | null>(null);
-  const [modules, setModules] = useState<Module[]>([]);
+  const [{ photo, gender, season, undertone, modules, skinDone }] = useState(initHub);
   const [prevDone, setPrevDone] = useState<Record<string, boolean>>({});
   const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
-  const [skinDone, setSkinDone] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try { const raw = localStorage.getItem("mellow_skin_analysis"); return !!(raw && JSON.parse(raw)?.skinType); } catch { return false; }
-  });
 
   useEffect(() => {
-    const img = localStorage.getItem("mellow_image");
-    if (!img) { router.replace("/"); return; }
-    setPhoto(img);
-
-    const g = localStorage.getItem("mellow_gender") ?? "female";
-    setGender(g);
-    const isMale = g === "male";
-
-    const analysisRaw = localStorage.getItem("mellow_analysis");
-    const analysis: ColorAnalysis | null = analysisRaw ? JSON.parse(analysisRaw) : null;
-    const hasAnalysis = !!analysis;
-
-    if (analysis) {
-      setSeason(analysis.season);
-      setUndertone(analysis.undertone);
-    }
-
-    const hasFaceShape = !!(
-      localStorage.getItem("mellow_face_shape") ||
-      analysis?.hair?.faceShape
-    );
-    const faceConf = localStorage.getItem("mellow_face_shape_confidence");
-    const skinRaw = localStorage.getItem("mellow_skin_analysis");
-    const hasSkin = !!(() => { try { return skinRaw && JSON.parse(skinRaw)?.skinType; } catch { return false; } })();
-    setSkinDone(hasSkin);
-    const hasBody = !!localStorage.getItem("mellow_body_type");
-
-    const mods: Module[] = [
-      {
-        key: "colour",
-        title: "Colour Analysis",
-        subtitle: analysis ? `${analysis.season} · ${analysis.undertone}` : "Season & palette",
-        path: "/results",
-        done: hasAnalysis,
-      },
-      {
-        key: "makeup",
-        title: isMale ? "Grooming Guide" : "Makeup Guide",
-        subtitle: isMale ? "Beard, skincare & fragrance" : "Eyeshadow, lips, blush & contour",
-        path: isMale ? "/results/grooming" : "/results/makeup",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "hair",
-        title: "Hair Styles",
-        subtitle: hasFaceShape
-          ? `Face shape: ${localStorage.getItem("mellow_face_shape") ?? analysis?.hair?.faceShape ?? "detected"}`
-          : "Flattering cuts for your face",
-        path: "/results/hair",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "style",
-        title: "Style Guide",
-        subtitle: hasBody
-          ? `Body shape: ${localStorage.getItem("mellow_body_type")}`
-          : "Outfit formula & flattering styles",
-        path: "/results/style",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "occasions",
-        title: "Indian Occasions",
-        subtitle: "Festival, wedding & daily Indian wear",
-        path: "/results/occasions",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "nails",
-        title: "Nail Colours",
-        subtitle: "Season-matched polish picks",
-        path: "/results/nails",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "fragrance",
-        title: "Fragrance Guide",
-        subtitle: "Scent families & Indian attars",
-        path: "/results/fragrance",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "accessories",
-        title: "Accessories",
-        subtitle: "Bags, belts, shoes & dupattas",
-        path: "/results/accessories",
-        done: hasAnalysis,
-        locked: !hasAnalysis,
-        lockedMsg: "Complete colour analysis first",
-      },
-      {
-        key: "face",
-        title: "Face Shape",
-        subtitle: hasFaceShape
-          ? `${localStorage.getItem("mellow_face_shape") ?? analysis?.hair?.faceShape ?? "Detected"}${faceConf === "Low" ? " · Low confidence" : ""}`
-          : "Scan for precise detection",
-        path: hasFaceShape ? "/results/face" : "/face-scan",
-        done: hasFaceShape,
-      },
-      {
-        key: "skin",
-        title: "Skin Analysis",
-        subtitle: hasSkin ? "Routine, concerns & ingredients" : "Close-up skin scan",
-        path: hasSkin ? "/results/skin" : "/skin-scan",
-        done: hasSkin,
-      },
-      {
-        key: "body",
-        title: "Body Shape",
-        subtitle: hasBody
-          ? (localStorage.getItem("mellow_body_type") ?? "Measured")
-          : "Measurements or camera scan",
-        path: hasBody ? "/results/style" : "/body-scan",
-        done: hasBody,
-      },
-    ];
-
-    setModules(mods);
-    const doneMap = Object.fromEntries(mods.map(m => [m.key, m.done]));
-    // Detect newly completed module vs previous render
+    if (!photo) { router.replace("/"); return; }
+    const doneMap = Object.fromEntries(modules.map(m => [m.key, m.done]));
     setPrevDone(prev => {
-      const newlyDone = mods.find(m => m.done && !prev[m.key]);
+      const newlyDone = modules.find(m => m.done && !prev[m.key]);
       if (newlyDone) setJustUnlocked(newlyDone.key);
       return doneMap;
     });
@@ -244,14 +250,14 @@ export default function HubPage() {
               {doneCount} of {totalCount} complete
             </p>
             <p className="font-sans text-[0.58rem] tracking-widest uppercase text-brown-mid/50">
-              {Math.round((doneCount / totalCount) * 100)}%
+              {totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0}%
             </p>
           </div>
           <div className="h-0.5 bg-brown-light/20 rounded-full overflow-hidden">
             <motion.div
               className="h-full bg-brown-mid rounded-full"
               initial={{ width: 0 }}
-              animate={{ width: `${(doneCount / totalCount) * 100}%` }}
+              animate={{ width: `${totalCount > 0 ? (doneCount / totalCount) * 100 : 0}%` }}
               transition={{ duration: 0.7, delay: 0.2, ease: "easeOut" }}
             />
           </div>
