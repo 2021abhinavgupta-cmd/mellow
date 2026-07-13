@@ -80,6 +80,42 @@ export default function SkinPage() {
 
   if (!analysis) return null;
 
+  // Empty/failed analysis — guide user to dedicated skin scan
+  if (!analysis.skinType) {
+    return (
+      <div className="min-h-screen bg-cream pb-16">
+        <div className="sticky top-0 z-10 bg-cream/90 backdrop-blur border-b border-brown-light/20 px-5 py-3 flex items-center gap-3">
+          <button
+            onClick={() => router.back()}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-brown-light/20 transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 text-brown-dark" strokeWidth={1.5} />
+          </button>
+          <p className="font-sans text-[0.58rem] tracking-[0.28em] uppercase text-brown-mid">Skin Analysis</p>
+        </div>
+        <div className="max-w-xl mx-auto px-5 pt-16 space-y-5 text-center">
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <h1 className="font-display text-4xl text-brown-dark mb-4" style={{ fontStyle: "italic", fontWeight: 300 }}>
+              Skin scan needed
+            </h1>
+            <p className="font-sans text-sm text-brown-mid mb-8 leading-relaxed max-w-xs mx-auto">
+              For accurate skin analysis, use the close-up skin scanner — it captures texture, pores, and concerns in detail.
+            </p>
+            <button
+              onClick={() => {
+                localStorage.removeItem("mellow_skin_analysis");
+                router.push("/skin-scan");
+              }}
+              className="px-6 py-3 bg-brown-dark text-cream rounded-xl font-sans text-xs tracking-widest uppercase hover:bg-brown-mid transition-colors"
+            >
+              Start Skin Scan
+            </button>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
+
   const concerns = analysis.concerns ?? {};
   const concernKeys = Object.keys(CONCERN_META) as (keyof typeof CONCERN_META)[];
 

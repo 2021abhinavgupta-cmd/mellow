@@ -167,7 +167,7 @@ export default function Home() {
         signal: controller.signal,
       });
       const data = await res.json();
-      if (res.ok) localStorage.setItem("mellow_skin_analysis", JSON.stringify(data));
+      if (res.ok && data.skinType) localStorage.setItem("mellow_skin_analysis", JSON.stringify(data));
     } catch {
       // non-fatal — skin results page will handle missing data
     } finally {
