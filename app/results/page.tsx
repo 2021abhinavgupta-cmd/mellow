@@ -185,8 +185,8 @@ export default function ColorResultsPage() {
           <Card>
             <SectionLabel>What Works For You</SectionLabel>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {(analysis.whatWorksWell ?? []).map((item) => (
-                <div key={item} className="flex items-start gap-2.5">
+              {(analysis.whatWorksWell ?? []).map((item, i) => (
+                <div key={`ww-${i}`} className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-brown-mid mt-0.5 flex-shrink-0" strokeWidth={1.5} />
                   <span className="font-sans text-xs text-brown-dark leading-snug">{item}</span>
                 </div>
@@ -241,8 +241,8 @@ export default function ColorResultsPage() {
                     <span className="text-brown-mid">{icon}</span> {label}
                   </p>
                   <ul className="space-y-2">
-                    {(items ?? []).map((item) => (
-                      <li key={item} className="font-sans text-xs text-brown-mid leading-relaxed flex gap-2">
+                    {(items ?? []).map((item, i) => (
+                      <li key={`${label}-${i}`} className="font-sans text-xs text-brown-mid leading-relaxed flex gap-2">
                         <span className="text-brown-light flex-shrink-0">•</span>{item}
                       </li>
                     ))}
@@ -289,8 +289,8 @@ export default function ColorResultsPage() {
         <motion.div {...fade(0.48)} className="text-center pt-1">
           <p className="font-sans text-[0.58rem] tracking-[0.3em] uppercase text-brown-mid mb-3">How Your Colouring Reads</p>
           <div className="flex gap-3 flex-wrap justify-center">
-            {(analysis.traits ?? []).map((trait) => (
-              <span key={trait} className="font-sans text-xs tracking-widest uppercase text-brown-mid border border-brown-light/50 rounded-full px-5 py-2">
+            {(analysis.traits ?? []).map((trait, i) => (
+              <span key={`tr-${i}`} className="font-sans text-xs tracking-widest uppercase text-brown-mid border border-brown-light/50 rounded-full px-5 py-2">
                 {trait}
               </span>
             ))}

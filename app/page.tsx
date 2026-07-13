@@ -485,9 +485,33 @@ export default function Home() {
                 </div>
               </div>
 
+              {/* Age range picker — only show after gender selected */}
+              {gender && (
+                <div>
+                  <p className="font-sans text-[0.6rem] tracking-[0.3em] uppercase text-brown-mid text-center mb-3">
+                    Age range
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(["Under 25", "25–35", "35–45", "45+"] as const).map((age) => (
+                      <button
+                        key={age}
+                        onClick={() => setAgeRange(age)}
+                        className={`py-3 rounded-xl font-sans text-sm tracking-[0.15em] transition-all duration-200 border ${
+                          ageRange === age
+                            ? "bg-brown-dark text-cream border-brown-dark"
+                            : "bg-white/50 text-brown-mid border-brown-light hover:bg-white/80 hover:border-brown-mid"
+                        }`}
+                      >
+                        {age}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={analyze}
-                disabled={!gender}
+                disabled={!gender || !ageRange}
                 className="w-full bg-brown-dark text-cream py-4 rounded-xl font-sans tracking-[0.2em] text-sm uppercase hover:bg-brown-mid transition-colors duration-300 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Analyze My Style

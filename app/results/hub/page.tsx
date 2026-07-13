@@ -32,6 +32,10 @@ export default function HubPage() {
   const [modules, setModules] = useState<Module[]>([]);
   const [prevDone, setPrevDone] = useState<Record<string, boolean>>({});
   const [justUnlocked, setJustUnlocked] = useState<string | null>(null);
+  const [skinDone, setSkinDone] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { const raw = localStorage.getItem("mellow_skin_analysis"); return !!(raw && JSON.parse(raw)?.skinType); } catch { return false; }
+  });
 
   useEffect(() => {
     const img = localStorage.getItem("mellow_image");
@@ -58,6 +62,7 @@ export default function HubPage() {
     const faceConf = localStorage.getItem("mellow_face_shape_confidence");
     const skinRaw = localStorage.getItem("mellow_skin_analysis");
     const hasSkin = !!(() => { try { return skinRaw && JSON.parse(skinRaw)?.skinType; } catch { return false; } })();
+    setSkinDone(hasSkin);
     const hasBody = !!localStorage.getItem("mellow_body_type");
 
     const mods: Module[] = [
@@ -252,8 +257,8 @@ export default function HubPage() {
           </div>
         </motion.div>
 
-        {/* Rescan prompt — show when all core scans done but skin/body missing */}
-        {!prevDone["skin"] && (
+        {/* Rescan prompt — show when skin scan missing */}
+        {!skinDone && (
           <AnimatePresence>
             <motion.div
               initial={{ opacity: 0, height: 0 }}
