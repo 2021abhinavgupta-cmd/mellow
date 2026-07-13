@@ -432,6 +432,15 @@ UI colors: active ticks/arc use `#8B6347` (brown-mid), inactive ticks use `rgba(
 
 Real-time tick fill: `activeSeg` + `activeSegPct` states update every frame in scan phase; pending segment ticks interpolate `rgba(139,99,71,0.3→1.0)` as dwell accumulates. No CSS transition on pending ticks — must feel instant.
 
+**Scan-ring UX enhancements (commit 8f1fd86)**:
+- **Moving dot**: `dotAngle = Math.atan2(yaw, -pitch) - Math.PI/2` computed every frame; rendered as `<circle cx={50+47*cos} cy={50+47*sin} r={2.5} fill="#4A3728">` in SVG viewBox 100×100. Only visible during `phase === "scan" && faceInView && !tooClose && dotAngle !== null`. Zero extra computation — `dotAngle` was already derived, just never rendered.
+- **Next-segment highlight**: `nextSeg` computed via IIFE in JSX (nearest uncovered segment from `activeSeg`, searching fwd then bwd). Shown at `rgba(139,99,71,0.65)` / `strokeWidth 2.5`. Prevents user guessing which segment to target.
+- **Completion flash**: SVG ring visibility extended to `status === "scanning" || status === "done"`. `isDoneFlash` flag turns all ticks `#C9A882` during the 800ms done window before navigation.
+- **Haptic**: `navigator.vibrate?.(40)` fires on each segment lock (inside `setCovered` callback after `setPulseSeg`). Optional chaining — safe on desktop.
+- **Direction arrow**: `<motion.p>` pulsing `→`/`←`/`↓` between instruction text and progress bar. Logic: `!R → "right"`, `!L → "left"`, `!D → "down"` where R/L/D = coverage of right/left/down arc sectors. Only shown when `phase === "scan" && faceInView && !tooClose && !tooFar`. Framer animate `opacity: [0.35, 0.75, 0.35]` repeat.
+- **Shape preview**: `"detecting {faceShape.toLowerCase()}"` in small text below instruction — live output from classifier during scan.
+- **Progress bar**: 0→35% during init phase (proportional to `initPct`), 35→100% during scan (proportional to `covered` count / `MIN_COVERED`). Shows "X / 7 positions" counter text.
+
 Post-scan UI: `fromScan` flag in `page.tsx` — when `true`, shows face shape card (shape name + skin tone swatch, no photo). Photo still saved to localStorage for GPT-4o. Upload path always shows photo preview (`fromScan = false`).
 
 ## SkinScanner (`app/components/SkinScanner.tsx`)
