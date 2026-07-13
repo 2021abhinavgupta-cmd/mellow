@@ -40,7 +40,7 @@ app/
   globals.css             # Tailwind v4 @theme inline — defines color + font tokens
   lib/
     types.ts              # Shared TypeScript interfaces: ColorAnalysis, NamedSwatch
-  page.tsx                # Landing page (client): FaceScanner scan → analyze() calls /api/analyze-skin inline → /results/skin
+  page.tsx                # Landing page (client): gender picker → age range picker (Under 25/25–35/35–45/45+) → FaceScanner → analyze() → /results/skin
   api/
     analyze/
       route.ts            # POST handler: receives image data URL, calls GPT-4o vision, returns ColorAnalysis JSON
@@ -63,13 +63,21 @@ app/
     style/
       page.tsx            # Style Guide page: body type, occasion tabs with AI outfit images, necklines, prints, outfit formula
     face/
-      page.tsx            # Face shape card + all-shapes reference chart; CTA → /skin-scan; `FACE_SHAPE_EXTRAS` lookup adds glasses/earrings/contour/bindi per shape; bindi hidden for male users
+      page.tsx            # Face shape card + all-shapes reference chart; scan accuracy feedback (saves mellow_face_shape_feedback); CTA → /skin-scan; `FACE_SHAPE_EXTRAS` lookup adds glasses/earrings/contour/bindi per shape; bindi hidden for male users
     skin/
       page.tsx            # Skin Analysis page: skin type, concerns severity bars, routine tabs, ingredients
     hub/
-      page.tsx            # Dashboard: 7 analyses with completion status + progress bar; reads all localStorage keys at mount
+      page.tsx            # Dashboard: 11 modules, unlock spring animation, rescan prompt; reads all localStorage keys at mount
     grooming/
-      page.tsx            # PLANNED Sprint 4: men only — beard styles, skincare, fragrance (replaces makeup for men)
+      page.tsx            # Men only — beard styles, skincare, fragrance; female users redirected to /results/makeup
+    nails/
+      page.tsx            # Nail colours: 6 polish swatches, French tip hex, avoid list; fallback to bestColors if nails field absent
+    fragrance/
+      page.tsx            # Fragrance guide: scent families, key notes chips, Indian attars, seasonal tips
+    accessories/
+      page.tsx            # Accessories: handbag, sunglasses, belt, scarf, shoes colour recommendations
+    occasions/
+      page.tsx            # Indian occasions: 3-tab switcher (Festival / Wedding Guest / Daily Wear)
 ```
 
 ### Mandatory user flow
@@ -78,7 +86,7 @@ app/
 Landing page.tsx (FaceScanner captures face shape + photo)
   → analyze() called on "Analyse My Style"
   → clears mellow_analysis, mellow_skin_analysis, mellow_body_type, mellow_measurements, hair/style sessionStorage
-  → saves mellow_image, mellow_gender, mellow_face_shape to localStorage
+  → saves mellow_image, mellow_gender, mellow_face_shape, mellow_age_range to localStorage
   → POST /api/analyze-skin (non-fatal — if fails, still navigates forward)
   → router.push("/results/skin")
 
@@ -139,7 +147,7 @@ User selects photo (page.tsx)
   → "� Hair Styles" nav back to /results/hair
 
 Route handler (app/api/analyze/route.ts)
-  → GPT-4o vision (gpt-4o, response_format: json_object, max_tokens: 5500)
+  → GPT-4o vision (gpt-4o, response_format: json_object, max_tokens: 7000)
   → returns full ColorAnalysis JSON (colour + makeup + hair + style in one call)
 
 Route handler (app/api/generate-visuals/route.ts)
@@ -161,6 +169,8 @@ Route handler (app/api/generate-visuals/route.ts)
 | `mellow_skin_tone` | `SkinToneResult` JSON — ITA, Fitzpatrick, Monk, hex, LAB | User uploads new photo |
 | `mellow_skin_analysis` | `SkinAnalysis` JSON — skin type, concerns, routine, recommendations | User uploads new photo OR runs rescan from hub |
 | `mellow_body_type` | e.g. `"Hourglass"` — set when body scan complete; read by hub page | User uploads new photo |
+| `mellow_age_range` | `"Under 25"` / `"25–35"` / `"35–45"` / `"45+"` — set on landing page age picker | User uploads new photo |
+| `mellow_face_shape_feedback` | `"accurate"` or `"inaccurate"` — user feedback on face shape scan | User uploads new photo |
 
 Planned:
 
@@ -191,7 +201,7 @@ Lazy-initialised inside `getClient()` in `route.ts` — not at module level — 
 
 ### PWA manifest
 
-`app/manifest.ts` exports `MetadataRoute.Manifest` — Next.js auto-serves at `/manifest.webmanifest`. Icons at `/public/icon-192.png` and `/public/icon-512.png` not yet created — browser handles gracefully, home-screen icon blank until added.
+`app/manifest.ts` exports `MetadataRoute.Manifest` — Next.js auto-serves at `/manifest.webmanifest`. Icons at `/public/icon-192.png` and `/public/icon-512.png` — cream `#FAF6F0` bg, brown `#4A3728` "M" letterform, generated via Node.js zlib script (no external packages).
 
 ### ShareCard (canvas PNG)
 
@@ -200,6 +210,8 @@ Lazy-initialised inside `getClient()` in `route.ts` — not at module level — 
 ### Extending ColorAnalysis schema
 
 New fields added to `route.ts` BASE_SCHEMA and `types.ts` **won't exist on cached analyses** in localStorage. Always guard rendering: `{analysis.newField && (...)}`. Users must re-upload photo to get new fields.
+
+Current sub-objects in `ColorAnalysis`: `makeup`, `hair`, `style`, `nails`, `fragrance`, `accessories`, `indianOccasions`, `grooming` (male only). All optional — always guard with `analysis.field &&`.
 
 ### Visual generation (generate-visuals route)
 
