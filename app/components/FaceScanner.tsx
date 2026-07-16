@@ -346,6 +346,7 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
   const [activeSegPct,        setActiveSegPct]        = useState<number>(0);
   const [pulseSeg,            setPulseSeg]            = useState<number | null>(null);
   const [skinToneResult,      setSkinToneResult]      = useState<SkinToneResult | null>(null);
+  const [cameraErrorMsg,      setCameraErrorMsg]      = useState<"camera-denied" | "camera-missing" | "model-failed">("camera-denied");
 
   const doCapture = useCallback((shape: string, confidence: "High" | "Medium" | "Low") => {
     if (captured.current) return;
@@ -606,7 +607,15 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
         setStatus("scanning");
       } catch (err) {
         console.error("[FaceScanner]", err);
-        if (!cancelled) setStatus("error");
+        if (!cancelled) {
+          const name = (err as { name?: string })?.name ?? "";
+          setCameraErrorMsg(
+            name === "NotAllowedError" ? "camera-denied" :
+            name === "NotFoundError"   ? "camera-missing" :
+                                         "model-failed"
+          );
+          setStatus("error");
+        }
       }
     }
     init();
@@ -728,7 +737,19 @@ export default function FaceScanner({ gender, onCapture, onClose }: Props) {
           {/* Error overlay */}
           {status === "error" && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-brown-dark p-6 text-center gap-3">
-              <p className="font-sans text-sm text-cream">Camera access denied or unavailable.</p>
+              <p className="font-sans text-sm text-cream">
+                {cameraErrorMsg === "camera-denied"  && "Camera access denied. Allow camera in browser settings."}
+                {cameraErrorMsg === "camera-missing" && "No camera found on this device."}
+                {cameraErrorMsg === "model-failed"   && "Couldn't load face scanner. Check your connection and try again."}
+              </p>
+              {cameraErrorMsg === "model-failed" && (
+                <button
+                  onClick={() => { setStatus("loading"); setLoadKey(k => k + 1); }}
+                  className="font-sans text-xs text-brown-light underline underline-offset-2"
+                >
+                  Retry
+                </button>
+              )}
               <button onClick={onClose} className="font-sans text-xs text-brown-light underline underline-offset-2">
                 Upload a photo instead
               </button>
