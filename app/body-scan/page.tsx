@@ -33,7 +33,12 @@ export default function BodyScanPage() {
 
   const saveAndContinue = useCallback((shape: BodyShape) => {
     localStorage.setItem("mellow_body_type", shape);
-    router.push("/results");
+    if (sessionStorage.getItem("mellow_from_checklist") === "1") {
+      sessionStorage.removeItem("mellow_from_checklist");
+      router.push("/");
+    } else {
+      router.push("/results");
+    }
   }, [router]);
 
   const handleMeasureSubmit = () => {
@@ -174,7 +179,15 @@ export default function BodyScanPage() {
                 </button>
 
                 <button
-                  onClick={() => router.push("/results")}
+                  onClick={() => {
+                    if (sessionStorage.getItem("mellow_from_checklist") === "1") {
+                      localStorage.setItem("mellow_body_type", "AI Estimate");
+                      sessionStorage.removeItem("mellow_from_checklist");
+                      router.push("/");
+                    } else {
+                      router.push("/results");
+                    }
+                  }}
                   className="w-full py-3 font-sans text-xs tracking-widest uppercase text-brown-mid/50 hover:text-brown-mid transition-colors"
                 >
                   Skip — use AI estimate
